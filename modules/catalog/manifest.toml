@@ -1,0 +1,14 @@
+[module]
+id = "catalog"
+name = "图鉴查询"
+version = "0.1.0"
+description = "从国服 master.mdb 导入马娘、协助卡、技能，提供精确查询与数据版本"
+order = 10
+requires = []
+
+[api]
+prefix = "/api/catalog"
+
+[ui]
+label = "图鉴"
+panel = "panel.js"

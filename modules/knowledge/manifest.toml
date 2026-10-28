@@ -1,0 +1,14 @@
+[module]
+id = "knowledge"
+name = "知识库问答"
+version = "0.1.0"
+description = "导入攻略/公告文档，本地向量检索，再由 DeepSeek 组织带引用的回答"
+order = 20
+requires = []
+
+[api]
+prefix = "/api/knowledge"
+
+[ui]
+label = "知识库"
+panel = "panel.js"

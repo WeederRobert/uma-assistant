@@ -1,0 +1,10 @@
+[module]
+id = "gacha"
+name = "卡池"
+version = "0.1.0"
+description = "从 master.mdb 的 gacha_data 读卡池排期（含未来卡池）与精选卡片；面板并入「日程」页，本模块只提供 API"
+order = 60
+requires = ["catalog"]
+
+[api]
+prefix = "/api/gacha"

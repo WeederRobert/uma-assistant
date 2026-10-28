@@ -1,0 +1,19 @@
+# 模块模板
+#
+# 复制本目录并改名（不要以 _ 开头），即可获得一个可被内核自动加载的模块。
+# 目录名必须与 [module].id 一致，且是合法的 Python 标识符。
+
+[module]
+id = "example"
+name = "示例模块"
+version = "0.1.0"
+description = "一句话说明这个模块解决什么问题"
+order = 100
+requires = []
+
+[api]
+prefix = "/api/example"
+
+[ui]
+label = "示例"
+panel = "panel.js"

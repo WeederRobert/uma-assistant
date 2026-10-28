@@ -1,0 +1,14 @@
+[module]
+id = "races"
+name = "赛道与大赛"
+version = "0.1.0"
+description = "赛事目录与大赛排期来自 master.mdb，赛道路线与坡道来自 BWiki 数据页；含场地状态出现率，结构化查询，不依赖 LLM"
+order = 50
+requires = ["catalog"]
+
+[api]
+prefix = "/api/races"
+
+[ui]
+label = "赛道"
+panel = "panel.js"

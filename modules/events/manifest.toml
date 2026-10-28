@@ -1,0 +1,14 @@
+[module]
+id = "events"
+name = "日程"
+version = "0.2.0"
+description = "日程总页：BWiki 抓取的活动与已开始卡池，加上 master.mdb 的卡池预售排期与大赛排期"
+order = 40
+requires = ["sync", "gacha", "races"]
+
+[api]
+prefix = "/api/events"
+
+[ui]
+label = "日程"
+panel = "panel.js"

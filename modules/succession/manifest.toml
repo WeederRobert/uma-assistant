@@ -1,0 +1,14 @@
+[module]
+id = "succession"
+name = "相性"
+version = "0.1.0"
+description = "两只马娘共享的关系组点数与六人继承布局的相性分数，数据来自 master.mdb；不含适性加成"
+order = 70
+requires = ["catalog"]
+
+[api]
+prefix = "/api/succession"
+
+[ui]
+label = "相性"
+panel = "panel.js"

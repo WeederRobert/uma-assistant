@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>优俊少女助手</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark">U</span>
+          <div>
+            <div class="brand-name">优俊少女助手</div>
+            <div class="brand-sub" id="app-version">v0.1.0</div>
+          </div>
+        </div>
+
+        <nav class="nav" id="nav"></nav>
+
+        <div class="sidebar-footer">
+          <button class="version-badge" id="version-badge" type="button">数据版本检测中…</button>
+          <a class="api-link" href="/docs" target="_blank" rel="noreferrer">接口文档 /docs</a>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="main-scroll" id="view"></div>
+      </main>
+    </div>
+
+    <div class="toast" id="toast" hidden></div>
+    <script type="module" src="/static/app.js"></script>
+  </body>
+</html>
