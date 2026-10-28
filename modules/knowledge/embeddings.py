@@ -5,9 +5,21 @@ import threading
 from collections.abc import Sequence
 from typing import Protocol
 
-import numpy as np
-
 logger = logging.getLogger(__name__)
+
+_OPTIONAL_DEPS_HINT = (
+    "缺少可选组件 {name}：当前安装包是精简版，不含文档向量化能力。"
+    "请改用完整版安装包，或在源码目录执行 uv sync 后运行。"
+)
+
+
+def _numpy():
+    """numpy 随向量化能力一起属于可选组件，延迟导入以便精简安装包不携带它。"""
+    try:
+        import numpy
+    except ImportError as exc:
+        raise RuntimeError(_OPTIONAL_DEPS_HINT.format(name="numpy")) from exc
+    return numpy
 
 
 class EmbedderSettings(Protocol):
@@ -45,7 +57,10 @@ class Embedder:
         transformers 5.x 会在加载时联网探测仓库元数据，网络不通时会把已缓存的
         模型误判为“缺少 processing class”，因此这里先以 local_files_only 方式加载。
         """
-        from sentence_transformers import SentenceTransformer
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as exc:
+            raise RuntimeError(_OPTIONAL_DEPS_HINT.format(name="sentence-transformers")) from exc
 
         model_id = self.settings.embedding_model
         kwargs = {"device": self.settings.embedding_device}
@@ -74,6 +89,8 @@ class Embedder:
     def encode_documents(self, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
+        np = _numpy()
+
         model = self._ensure_model()
         vectors = model.encode(
             list(texts),
@@ -85,6 +102,8 @@ class Embedder:
         return np.asarray(vectors, dtype=np.float32).tolist()
 
     def encode_query(self, text: str) -> list[float]:
+        np = _numpy()
+
         model = self._ensure_model()
         prefix = self.settings.embedding_query_prefix or ""
         vector = model.encode(

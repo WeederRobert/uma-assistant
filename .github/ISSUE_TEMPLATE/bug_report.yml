@@ -1,0 +1,75 @@
+name: Bug 报告
+description: 报告可复现的故障：显示不对、接口报错、导入失败
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先确认这两件事，能省掉一半来回：
+
+        - 已经导入过 `master.mdb`（侧栏底部的数据版本徽标不是「数据版本未知」）
+        - 日志在 `data/logs/app.log`（打包版在 `%LOCALAPPDATA%\uma-assistant\data\logs\app.log`）
+
+  - type: input
+    id: app-version
+    attributes:
+      label: 应用版本
+      description: 侧栏版本号，或 `/api/system/info` 里的 `app.version`
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: data-version
+    attributes:
+      label: 数据版本
+      description: 侧栏底部徽标，或 `/api/system/info` 里的 `data.version`（没有数据就写「未导入」）
+      placeholder: mdb-cn-2026-10-22
+    validations:
+      required: true
+
+  - type: dropdown
+    id: run-mode
+    attributes:
+      label: 运行方式
+      options:
+        - 打包版（exe）
+        - 源码运行（uv run / start.cmd）
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开应用到出错的每一步，写清点击了哪里、输入了什么
+      placeholder: |
+        1. 打开「图鉴」
+        2. 搜索「特别周」
+        3. 点击第一条 → 详情里的……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果与实际结果
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志
+      description: 贴 `app.log` 末尾的报错片段即可，不要整份上传
+      render: text
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 没有粘贴 `master.mdb`、卡面、语音等游戏资源
+          required: true
+        - label: 已删除日志与截图里的 API key、token、本机用户名等隐私信息
+          required: true
+        - label: 这是使用本机已有数据时的故障，不涉及注入 / 抓包 / 自动操作
+          required: true

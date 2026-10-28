@@ -11,6 +11,8 @@ uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run python -m app.desktop --no-window   # 只跑服务，浏览器访问 http://127.0.0.1:8737
+uv run pyinstaller packaging/uma-assistant.spec --noconfirm   # 打包（精简版），产物在 dist/
+.\packaging\smoke.ps1 -Exe .\dist\uma-assistant\uma-assistant.exe   # 打包产物冒烟
 ```
 
 - 依赖只用 `uv add` / `uv add --dev` 增删，不要手改 `uv.lock`。
@@ -82,6 +84,7 @@ PR 检查清单：
 - [ ] 新增/改动接口、manifest 字段、数据结构，同步更新 `README.md` 或 `docs/`
 - [ ] 没有提交 `data/`、`.env`、`*.mdb` 或游戏资源
 - [ ] 改动涉及数据展示时，界面仍能显示数据版本
+- [ ] 改动涉及打包（`packaging/`、依赖增减）时，`packaging/smoke.ps1` 跑通
 - [ ] 遵守第 5 节的合规边界
 
 ## 4. 新增模块清单

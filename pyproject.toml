@@ -1,6 +1,6 @@
 [project]
 name = "uma-assistant"
-version = "0.1.0"
+version = "1.0.0"
 description = "《闪耀！优俊少女》桌面助手：模块化、可增量开发"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -20,6 +20,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.22.3",
     "pytest>=8.3.0",
     "ruff>=0.8.0",
 ]

@@ -78,3 +78,13 @@
 - **实体识别是启发式**：问句里没有库内的名字时会 miss（例如「那个很长的直线赛道」），`misses` 会如实说明。
 - **自调用依赖端口**：`app.desktop` 会把实际监听端口写回 settings；如果绕过 `run_server` 直接 `uvicorn app.main:app`，需要显式设 `UMA_KNOWLEDGE_STRUCTURED_BASE_URL`。
 - **冲突只做提示不做裁决**：冲突时让 LLM 说明取舍，不自动丢弃文档片段。
+
+## 可选组件与精简安装包
+
+`chromadb`（向量库）、`sentence-transformers` + `torch`（向量化）与 `numpy` 都是**延迟导入**的：
+
+- 模块加载时**不**导入它们，所以精简安装包（`packaging/uma-assistant.spec` 默认产物，约 45 MB）里 `knowledge` 仍能正常加载；
+- 缺组件时只影响「上传文档 / 检索片段」，调用时抛 `RuntimeError`，提示改用手感完整版或 `uv sync`；
+- 「结构化数据优先」这条路径只走本机 HTTP 接口，不依赖上述组件，因此在精简包里照常可用。
+
+完整版（`UMA_BUNDLE_ML=1`）才带文档 RAG，体积见 [packaging.md](packaging.md)。

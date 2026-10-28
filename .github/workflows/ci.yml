@@ -17,3 +17,25 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest
+
+  package:
+    runs-on: windows-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: 打包（精简版）
+        run: uv run pyinstaller packaging/uma-assistant.spec --noconfirm --distpath dist --workpath build
+      - name: 冒烟测试
+        run: powershell -ExecutionPolicy Bypass -File packaging/smoke.ps1 -Exe dist/uma-assistant/uma-assistant.exe
+      - name: 压缩产物
+        run: Compress-Archive -Path dist/uma-assistant/* -DestinationPath uma-assistant-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: uma-assistant-windows
+          path: uma-assistant-windows.zip
+          if-no-files-found: error
+          retention-days: 14

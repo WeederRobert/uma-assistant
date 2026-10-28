@@ -2,7 +2,7 @@
 
 本文档是功能排期与技术债的单一来源。`README.md` 说明"现在是什么"，`docs/` 说明"为什么这样设计"，本文档说明"接下来做什么、做到什么程度算完成"。
 
-- 当前版本：`v0.1.0`（代码版本号未随功能递增）；**功能进度**：P0–P2 完成，**P3 全部完成**（P3-1a / 1b / 2 / 3 / 4 / 5 / 6 已交付），下一步是 P4 发布包装
+- 当前版本：`v1.0.0`；**功能进度**：P0–P3 全部完成，**P4 发布包装完成**（打包 / CI artifact / 运行时落点 / 首次引导 / 仓库模板 / 合规说明）
 - 目标形态：Windows 桌面应用，本地运行、数据可追溯、功能按模块增量交付
 - 优先级原则：**数据可信 > 数据自助 > 时效信息 > 玩法深度 > 发布包装**
 
@@ -42,6 +42,11 @@
 | 规范（代码 / 提交 / PR / 模块清单） | `CONTRIBUTING.md` | — | ✅ |
 | Agent 定制（项目 instructions + 4 个 skills） | `.github/instructions/`、`.github/skills/` | 让 Agent 记住模块约定、数据口径、验证流程 | ✅ 2026-10-27 |
 | CI（ruff check + format check + pytest） | `.github/workflows/ci.yml` | — | ✅ |
+| **打包（PyInstaller 精简版 45.3 MB / 完整版 691.1 MB + 冒烟脚本）** | `packaging/` | `packaging/smoke.ps1` 实测：冷启动 2.6 s 就绪、`frozen=true`、数据落 `%LOCALAPPDATA%`、8 个模块全 `ok`；CI 出 zip artifact | ✅ 2026-10-28 |
+| 运行时文件落点（源码写项目内、打包写 `%LOCALAPPDATA%`） | `app/kernel/config.py` | `tests/test_config.py` 覆盖两种形态与 `%LOCALAPPDATA%` 缺失回退 | ✅ 2026-10-28 |
+| 首次使用引导（无数据时的三步卡片） | `static/app.js`、`/api/system/info` 的 `setup` | `tests/test_system.py` 断言首次运行与导入后翻转 | ✅ 2026-10-28 |
+| 开源仓库模板（Issue 表单 / PR 模板） | `.github/ISSUE_TEMPLATE/`、`.github/PULL_REQUEST_TEMPLATE.md` | — | ✅ 2026-10-28 |
+| 数据合规说明（来源 / 不分发范围 / 离机路径） | `docs/data-policy.md` | — | ✅ 2026-10-28 |
 
 ### 已知缺口
 
@@ -212,14 +217,14 @@ flowchart LR
 
 ## P4 — 公开发布（v1.0.0）
 
-| ID | 任务 | 验收标准 | 依赖 |
-| --- | --- | --- | --- |
-| P4-1 | 打包评估 | 评估 PyInstaller 体积（sentence-transformers 预计 2GB+），给出方案：体积裁剪 / ONNX / 可选组件 | P3 |
-| P4-2 | 打包与自动构建 | 产出单文件或安装包；CI 出 artifact | P4-1 |
-| P4-2b | 运行时文件落点定稿 | 打包后决定 `data/` 与中转目录的最终位置（安装目录旁 / `%LOCALAPPDATA%`），业务代码只依赖 `Settings.data_dir` 与 `Settings.tmp_dir` | P4-2 |
-| P4-3 | 首次使用引导 | 无数据时明确告诉用户下一步做什么，而不是空白界面 | P1 |
-| P4-4 | 开源仓库整理 | `LICENSE` / `CONTRIBUTING` / `docs` 齐备，Issue 与 PR 模板 | P0 |
-| P4-5 | 数据合规说明 | 说清哪些数据来自哪里、哪些不分发 | P2 |
+| ID | 任务 | 验收标准 | 依赖 | 状态 |
+| --- | --- | --- | --- | --- |
+| P4-1 | 打包评估 | 评估 PyInstaller 体积（sentence-transformers 预计 2GB+），给出方案：体积裁剪 / ONNX / 可选组件 | P3 | ✅ 实测 `.venv` 1061 MB（torch 475 / scipy 93 / kubernetes 70 / chromadb 绑定 61 / transformers 55）；结论是**可选组件**：三个重依赖改成延迟导入 + spec 排除，精简版 45.3 MB。评估过但未采用的 ONNX / 全量方案写在 [docs/packaging.md](docs/packaging.md) |
+| P4-2 | 打包与自动构建 | 产出单文件或安装包；CI 出 artifact | P4-1 | ✅ `packaging/uma-assistant.spec`（onedir 默认，`UMA_ONEFILE` / `UMA_BUNDLE_ML` / `UMA_CONSOLE` 三个开关）+ `packaging/smoke.ps1`；CI `package` 任务出 `uma-assistant-windows.zip`。实测精简版 45.3 MB / 770 文件，冷启动 2.6 s 就绪，8 个模块全部 `ok` |
+| P4-2b | 运行时文件落点定稿 | 打包后决定 `data/` 与中转目录的最终位置（安装目录旁 / `%LOCALAPPDATA%`），业务代码只依赖 `Settings.data_dir` 与 `Settings.tmp_dir` | P4-2 | ✅ 落 `%LOCALAPPDATA%\uma-assistant\data\`（`.tmp` 在其下），只读资源走 `sys._MEIPASS`，`.env` 读 exe 同级；实现集中在 `config.py` 的 `is_frozen()` / `resource_root()` / `app_root()` / `default_data_dir()`，打包产物实测 `frozen=true`、数据目录为 `%LOCALAPPDATA%` |
+| P4-3 | 首次使用引导 | 无数据时明确告诉用户下一步做什么，而不是空白界面 | P1 | ✅ `/api/system/info` 新增 `setup`（`first_run` / `mdb_present` / `can_import_via_ui` / `degraded_modules`）与 `paths`；概览页在首次运行时给出「导入数据 → 配置问答 → 查询」三步，可直接跳到「数据同步」；打包版不再提示源码里才有的 CLI 命令 |
+| P4-4 | 开源仓库整理 | `LICENSE` / `CONTRIBUTING` / `docs` 齐备，Issue 与 PR 模板 | P0 | ✅ 新增 `.github/ISSUE_TEMPLATE/{bug_report,feature_request,config}.yml` 与 `.github/PULL_REQUEST_TEMPLATE.md`（模板里带「不贴游戏资源 / 不贴 key」的必勾项） |
+| P4-5 | 数据合规说明 | 说清哪些数据来自哪里、哪些不分发 | P2 | ✅ [docs/data-policy.md](docs/data-policy.md)：来源清单（含可信级别与落点）、不分发范围、数据落点、唯一的离机路径（知识库问答发给 DeepSeek）、抓取礼节；README「合规边界」与 Issue 模板均链接过去 |
 
 ## 模块路线
 
@@ -251,7 +256,7 @@ flowchart LR
 | `catalog` 表结构写死列名 | mdb 结构大改时需改代码 | 国服更换数据格式时 |
 | 无端到端测试（只有 API 冒烟） | 前端回归靠手点 | P0 完成后补一条 Playwright 流程 |
 | ~~未初始化 git~~ | 已解决：`main` 分支 + 首个提交 + `v0.1.0` 标签（2026-10-28） | P0-6 ✅ |
-| 运行时文件全部落在项目 `data/` 内（含中转目录 `data/.tmp/`） | 打包成独立程序后路径不稳定（只读安装目录、多用户） | P4-2b：定稿到安装目录旁或 `%LOCALAPPDATA%` |
+| ~~运行时文件全部落在项目 `data/` 内（含中转目录 `data/.tmp/`）~~ | 已解决：打包后落 `%LOCALAPPDATA%\uma-assistant\data\`，源码运行仍用项目内 `data/` | P4-2b ✅ |
 
 ## 风险
 
@@ -261,7 +266,7 @@ flowchart LR
 | 文件被加密或非标准 SQLite | 低 | 整条数据链断 | 已在两份真实快照上验证为标准 SQLite；缺表时抛 `MasterMdbError` |
 | 公开后收到版权/合规质疑 | 中 | 项目无法继续 | 严守 `CONTRIBUTING.md` 第 5 节；不分发资源、不自动化操作 |
 | BWiki 页面结构变动 | 高 | 抓取失效 | 解析层与抓取层分离；失败降级为使用缓存 |
-| 打包体积过大影响传播 | 高 | 玩家放弃安装 | P4-1 先评估再动手，优先考虑模型可选 |
+| ~~打包体积过大影响传播~~ | ~~高~~ | 已缓解 | 默认精简版 45.3 MB（不含向量化依赖）；完整版 691 MB 需 `UMA_BUNDLE_ML=1` 自建，见 [docs/packaging.md](docs/packaging.md) |
 | 简中服版本进度与日服错位 | 高 | 攻略建议不适用 | 一切结论标注数据版本；不做跨服推断 |
 
 ## 不做的事

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 首次启动 / 导入 master.mdb
+    url: https://github.com/WeederRobert/uma-assistant/blob/main/README.md
+    about: 启动、导入数据、配置 API key 的步骤，先看这里
+  - name: 数据来源与合规说明
+    url: https://github.com/WeederRobert/uma-assistant/blob/main/docs/data-policy.md
+    about: 哪些数据来自哪里、哪些不随仓库分发、哪些数据会离开本机
