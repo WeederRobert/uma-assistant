@@ -130,6 +130,51 @@ function cleanup() {
   }
 }
 
+function renderOnboarding(info) {
+  const setup = info.setup;
+  if (!setup || !setup.first_run) return "";
+  const dataDir = info.paths?.data || "";
+  const mdbPath = info.paths?.mdb || "";
+  const importAction = setup.can_import_via_ui
+    ? `<a class="more-btn" href="#/sync">打开「数据同步」</a>`
+    : "";
+  const importHint = setup.can_import_via_ui
+    ? `用模拟器或已连接的手机：在「数据同步」点「检查客户端」，再导入这一版；手上只有一个文件：在同一页直接选 <span class="mono">master.mdb</span> 上传。`
+    : `「数据同步」模块当前不可用，请把 <span class="mono">master.mdb</span> 放到 <span class="mono">${escapeHtml(mdbPath)}</span> 后重启。`;
+  const cliHint = info.app.frozen
+    ? ""
+    : `<p class="hint">命令行方式：<span class="mono">uv run python scripts/import_master_mdb.py &lt;master.mdb&gt; --game-version &lt;版本&gt;</span></p>`;
+  const degraded = (setup.degraded_modules || [])
+    .map(
+      (m) =>
+        `<li><span class="mono">${escapeHtml(m.id)}</span>：${escapeHtml(m.error || "未加载")}</li>`,
+    )
+    .join("");
+  return `
+    <section class="card onboarding">
+      <h2>从这里开始</h2>
+      <p class="hint">当前还没有结构化数据。下面三步把应用跑起来，第 2 步可以跳过。</p>
+      <ol class="steps">
+        <li>
+          <div class="step-title">导入游戏数据 <span class="pill muted">必做</span></div>
+          <p class="hint">${importHint}</p>
+          <p class="hint">导入后的数据库、日志与快照都在 <span class="mono">${escapeHtml(dataDir)}</span>。</p>
+          ${cliHint}
+          ${importAction}
+        </li>
+        <li>
+          <div class="step-title">配置知识库问答 <span class="pill muted">可选</span></div>
+          <p class="hint">在 <span class="mono">.env</span> 里填 <span class="mono">DEEPSEEK_API_KEY</span> 后重启，才能调用模型问答；不填也能用图鉴、日程、卡池、赛道、技能、相性。</p>
+        </li>
+        <li>
+          <div class="step-title">开始查询 <span class="pill ok">导入后可用</span></div>
+          <p class="hint">从左侧进入各模块；每处结论都会标注当前数据版本，重新导入后版本号随之变化。</p>
+        </li>
+      </ol>
+      ${degraded ? `<h3>当前不可用的模块</h3><ul class="steps plain">${degraded}</ul>` : ""}
+    </section>`;
+}
+
 function renderOverview() {
   const info = state.info;
   const data = info.data;
@@ -139,6 +184,7 @@ function renderOverview() {
   view.innerHTML = `
     <h1 class="page-title">概览</h1>
     <p class="page-desc">所有事实性结论都应能追溯到下面的数据版本；导入或更新数据后，版本号会随之变化。</p>
+    ${renderOnboarding(info)}
     <div class="grid two">
       <section class="card">
         <h2>数据版本</h2>
@@ -152,8 +198,7 @@ function renderOverview() {
         ${
           data.known
             ? ""
-            : `<p class="hint">还没有结构化数据。把国服 <span class="mono">master.mdb</span> 放到本机后执行：
-              <br /><span class="mono">uv run python scripts/import_master_mdb.py &lt;path&gt; --game-version &lt;版本&gt;</span></p>`
+            : `<p class="hint">还没有结构化数据，按上方「从这里开始」的第一步导入即可。</p>`
         }
       </section>
       <section class="card">

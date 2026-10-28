@@ -5,6 +5,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.kernel.config import Settings
+from app.kernel.database import Database
+from app.kernel.dataversion import write_data_version
 from app.main import create_app
 
 
@@ -27,6 +29,35 @@ def test_system_info_reports_unknown_data_version(settings: Settings) -> None:
     assert by_id["catalog"]["status"] == "ok"
     assert by_id["knowledge"]["ui"]["panel"] == "/module-assets/knowledge/panel.js"
     assert by_id["catalog"]["details"]["counts"]["characters"] == 0
+
+
+def test_system_info_exposes_first_run_guidance(settings: Settings) -> None:
+    with TestClient(create_app(settings)) as client:
+        payload = client.get("/api/system/info").json()
+
+    setup = payload["setup"]
+    assert setup["first_run"] is True
+    assert setup["mdb_present"] is False
+    assert setup["can_import_via_ui"] is True
+    assert setup["degraded_modules"] == []
+    assert payload["app"]["frozen"] is False
+    assert Path(payload["paths"]["data"]) == settings.data_dir
+    assert Path(payload["paths"]["mdb"]) == settings.mdb_path
+
+
+def test_setup_flips_to_ready_after_import(settings: Settings) -> None:
+    db = Database(settings.db_path)
+    try:
+        write_data_version(db, version="mdb-cn-2026-10-22", game_version="2.0.2", source="cli")
+    finally:
+        db.close()
+
+    with TestClient(create_app(settings)) as client:
+        payload = client.get("/api/system/info").json()
+
+    assert payload["setup"]["first_run"] is False
+    assert payload["data"]["known"] is True
+    assert payload["data"]["version"] == "mdb-cn-2026-10-22"
 
 
 def test_knowledge_module_starts_empty(settings: Settings) -> None:
