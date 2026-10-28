@@ -6,7 +6,7 @@
 - 原则：事实查库、建议交给 LLM；每条结论都能追溯到一个**数据版本**
 - 许可：Apache-2.0
 
-> 当前状态：MVP 骨架可运行。内核、模块系统、数据版本、图鉴模块（master.mdb 导入 + 查询，含马娘技能组与协助卡各突破等级数值）、知识库模块（RAG + DeepSeek）、数据同步（客户端提取 / 上传）、日程（BWiki 简中服卡池 + mdb 卡池预告 + 大赛排期，汇总一页）、赛道（赛事目录 + 赛道几何 + 场地状态出现率）、技能（条件 / 效果参数 / 来源反查 / 进化关系）、相性（两人关系组点数 + 六人继承布局）已打通；内置 [机制知识库素材](docs/kb/README.md) 让助手在没有 `master.mdb` 时也能回答机制问题。
+> 当前状态：**v1.0.0**，可打包分发。内核、模块系统、数据版本、图鉴模块（master.mdb 导入 + 查询，含马娘技能组与协助卡各突破等级数值）、知识库模块（RAG + DeepSeek）、数据同步（客户端提取 / 上传）、日程（BWiki 简中服卡池 + mdb 卡池预告 + 大赛排期，汇总一页）、赛道（赛事目录 + 赛道几何 + 场地状态出现率）、技能（条件 / 效果参数 / 来源反查 / 进化关系）、相性（两人关系组点数 + 六人继承布局）已打通；内置 [机制知识库素材](docs/kb/README.md) 让助手在没有 `master.mdb` 时也能回答机制问题。首次启动且没有数据时，概览页会给出「导入数据 → 配置问答 → 开始查询」三步引导。
 
 ## 快速开始
 
@@ -34,6 +34,14 @@
 | 0 | 正常退出 |
 | 2 | 虚拟环境不可用，且未找到 `uv` |
 | 3 | 依赖安装失败 |
+
+### 打包版（不需要 Python）
+
+从 [Releases](https://github.com/WeederRobert/uma-assistant/releases) 下载 `uma-assistant-windows.zip`，解压后双击 `uma-assistant.exe`：
+
+- **精简版**（默认）：约 44 MB，不含文档向量化组件；图鉴、日程、卡池、赛道、技能、相性都能用，知识库的**文档检索不可用**（会提示缺可选组件），结构化问答仍需要 `DEEPSEEK_API_KEY`
+- 数据与日志落在 `%LOCALAPPDATA%\uma-assistant\data\`，`.env` 放在 exe 同级目录
+- 想自己出包：`uv run pyinstaller packaging/uma-assistant.spec --noconfirm`；完整版加环境变量 `UMA_BUNDLE_ML=1`（体积约 1 GB，带文档 RAG）。细节见 [docs/packaging.md](docs/packaging.md)
 
 ### 手动启动
 
@@ -132,6 +140,7 @@ uma-assistant/
 │  ├─ import_master_mdb.py  # 导入 mdb（薄封装，逻辑在 modules/sync）
 │  ├─ fetch_mdb_android.py  # 从模拟器/真机提取当期 master.mdb（同上）
 │  └─ import_kb.py
+├─ packaging/            # PyInstaller 打包：spec、入口脚本与打包产物冒烟测试
 ├─ data/                 # 运行时生成：app.db / mdb / snapshots / .tmp / logs（都在工作区内）
 ├─ tests/                # pytest
 └─ docs/                 # 调研、架构、模块约定、数据同步设计、知识库素材
@@ -156,6 +165,10 @@ uma-assistant/
 | 相性 | `master.mdb` 的 `succession_relation` / `_member` / `_rank`（2133 组 / 4527 成员 / 3 档），两人点数与六人布局分数；明确不含适性（主数据无适性表） | [docs/succession.md](docs/succession.md) |
 | 卡池预告 | `master.mdb` 的 `gacha_data`／`text_data`／`gacha_available` 给出卡池排期与精选，含尚未开放的未来卡池（当期快照排到 2027-01-18），已用 BWiki 当期卡池交叉验证；面板并入「日程」页 | [docs/gacha.md](docs/gacha.md) |
 | 日志 | 控制台 + `data/logs/app.log`，`RotatingFileHandler` 1 MB × 3 份；uvicorn 也走同一份配置 | — |
+| 打包发布 | PyInstaller 出**精简版**（44 MB，不含 ML 依赖）；`UMA_BUNDLE_ML=1` 出完整版；CI 在 `windows-latest` 上出包并跑启动冒烟 | [docs/packaging.md](docs/packaging.md) |
+| 运行时落点 | 源码运行写项目内 `data/`；打包后写 `%LOCALAPPDATA%\uma-assistant\data\`，只读资源走 `_MEIPASS`，业务代码只认 `Settings.data_dir` / `tmp_dir` | [docs/packaging.md](docs/packaging.md) |
+| 首次使用引导 | 无结构化数据时概览页给出三步引导（导入 → 配置 → 查询），`/api/system/info` 的 `setup` 字段提供事实 | — |
+| 数据合规 | 来源清单、不分发范围、数据落点、哪些数据会离开本机 | [docs/data-policy.md](docs/data-policy.md) |
 | 调研结论 | 各服差异、数据源、开源项目与许可、合规红线 | [docs/research.md](docs/research.md) |
 | 知识库素材 | 机制类事实的来源登记、可信分级（A/B/C）与缺口清单，可直接导入 | [docs/kb/README.md](docs/kb/README.md) |
 
@@ -181,6 +194,8 @@ uma-assistant/
 - 不分发游戏本体资源（`master.mdb`、卡面、语音等）；只读取用户本机已有的文件，且不随代码仓库分发
 
 数据来源限于：用户本机的 `master.mdb`、公开 Wiki（如 BWiki）与官方公告。
+
+每条数据从哪来、哪些不随仓库分发、哪些数据会离开本机（只有知识库问答会把问题与检索片段发给 DeepSeek），逐条写在 [docs/data-policy.md](docs/data-policy.md)。
 
 ## 参与贡献
 
