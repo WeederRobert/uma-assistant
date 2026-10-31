@@ -12,6 +12,15 @@ function shortTime(value) {
   );
 }
 
+// fetch 失败时浏览器只给 "Failed to fetch"，对用户没有信息量
+function describeError(error) {
+  const message = error?.message ? String(error.message) : String(error);
+  if (/Failed to fetch|NetworkError|Load failed|ERR_CONNECTION/i.test(message)) {
+    return "连不上本地服务（可能已停止或在别的端口），先确认助手还在运行";
+  }
+  return message;
+}
+
 function shareCell(percent, text) {
   if (percent === null || percent === undefined) return `<span class="hint">—</span>`;
   const width = Math.max(0, Math.min(100, percent));
@@ -120,7 +129,7 @@ export default {
         renderSource(status);
         return status;
       } catch (error) {
-        sourceEl.innerHTML = `<dt>状态</dt><dd>${escapeHtml(error.message)}</dd>`;
+        sourceEl.innerHTML = `<dt>状态</dt><dd>${escapeHtml(describeError(error))}</dd>`;
         return null;
       }
     }
@@ -177,7 +186,7 @@ export default {
         renderList(data);
         return data;
       } catch (error) {
-        listEl.innerHTML = `<div class="answer">${escapeHtml(error.message)}</div>`;
+        listEl.innerHTML = `<div class="answer">${escapeHtml(describeError(error))}</div>`;
         listHint.textContent = "";
         return null;
       }
@@ -252,8 +261,9 @@ export default {
         const data = await api(`${API}/${circleId}${force ? "?refresh=true" : ""}`);
         renderDetail(data);
       } catch (error) {
-        detailBody.innerHTML = `<div class="answer">${escapeHtml(error.message)}</div>`;
-        toast(error.message, "error");
+        const message = describeError(error);
+        detailBody.innerHTML = `<div class="answer">${escapeHtml(message)}</div>`;
+        toast(message, "error");
       }
     }
 
@@ -271,8 +281,9 @@ export default {
         await loadStatus();
         await loadList();
       } catch (error) {
-        setResult(`拉取失败：${error.message}`);
-        toast(error.message, "error");
+        const message = describeError(error);
+        setResult(`拉取失败：${message}`);
+        toast(message, "error");
       } finally {
         refreshing = false;
         refreshBtn.disabled = false;
