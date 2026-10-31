@@ -126,6 +126,8 @@ sequenceDiagram
 
 无构建、无框架：`static/app.js` 负责侧栏 / hash 路由 / 动态 `import()` 面板，面板只拿到 `ctx`（`api` / `escapeHtml` / `toast` / `createLimiter` / `state` / `refreshInfo`）。
 
+侧栏底部提供浅色 / 深色主题开关，深色为默认；偏好写入浏览器 `localStorage`，由 `static/styles.css` 的主题变量统一控制外壳与面板基础配色。
+
 界面目标是「一屏能读完，不用滚一屏才看完一个列表」：
 
 | 约定 | 做法 |

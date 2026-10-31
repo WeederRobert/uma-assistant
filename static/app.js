@@ -9,6 +9,24 @@ const state = {
 const view = document.getElementById("view");
 const nav = document.getElementById("nav");
 const toastEl = document.getElementById("toast");
+const themeToggle = document.getElementById("theme-toggle");
+const THEME_STORAGE_KEY = "uma-assistant-theme";
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  themeToggle.checked = theme === "dark";
+  themeToggle.setAttribute("aria-label", `${theme === "dark" ? "深色" : "浅色"}主题`);
+}
+
+function initializeTheme() {
+  const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  applyTheme(savedTheme === "light" ? "light" : "dark");
+  themeToggle.addEventListener("change", () => {
+    const theme = themeToggle.checked ? "dark" : "light";
+    applyTheme(theme);
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  });
+}
 
 export async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -343,6 +361,7 @@ async function route() {
 }
 
 async function boot() {
+  initializeTheme();
   try {
     await refreshInfo();
   } catch (error) {

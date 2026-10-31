@@ -159,7 +159,7 @@ uma-assistant/
 | --- | --- | --- |
 | 开发计划 | 阶段划分、模块路线、技术债与风险；P0–P2 完成，P3 进行中（赛道 / 大赛 / 场地 / 技能已交付） | [ROADMAP.md](ROADMAP.md) |
 | Agent 定制 | `.github/instructions/` 存项目约定（模块七件套、数据口径、BOM 陷阱、验证流程），`.github/skills/` 放 4 个按需加载的 skill（需求拆解 / 新模块 / 数据源核实 / 交付验证） | [.github/](.github/) |
-| 界面约定 | 内容限宽 1180px、条目列表用 `.list.grid` 两到三列、长列表首屏 6–9 条 + 「展开其余 N 条」、长描述两行截断 | [docs/architecture.md](docs/architecture.md) |
+| 界面约定 | 内容限宽 1180px、条目列表用 `.list.grid` 两到三列、长列表首屏 6–9 条 + 「展开其余 N 条」、长描述两行截断；侧栏底部可切换浅色 / 深色主题并记住选择 | [docs/architecture.md](docs/architecture.md) |
 | 模块化 | 目录即模块，`manifest.toml` + `module.py: setup(ctx)`；单模块加载失败被隔离，不影响其它模块 | [docs/modules.md](docs/modules.md) |
 | 架构分层 | 内核（装配/存储/版本）与模块（业务）分离，模块之间不互相 import | [docs/architecture.md](docs/architecture.md) |
 | 数据版本 | `meta` 表存 `data.version`，侧栏徽标、`/api/system/info`、LLM 提示词都会带上 | [docs/architecture.md](docs/architecture.md) |

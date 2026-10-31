@@ -16,6 +16,7 @@
 | 模块系统（发现 / 依赖排序 / 隔离加载 / 生命周期） | `app/kernel/modules.py` | 启动日志 + `/api/system/modules` | ✅ |
 | 桌面壳（端口探测 / 就绪轮询 / pywebview 窗口） | `app/desktop.py` | 实际弹窗 + `/api/health` | ✅ |
 | 前端壳（侧栏 / hash 路由 / 数据版本徽标 / 面板动态加载） | `static/` | 浏览器实测三个页面 | ✅ |
+| 主题切换（深色默认 / 浅色可选，选择保存在本机浏览器） | `static/index.html`、`static/app.js`、`static/styles.css` | 浏览器切换与刷新后恢复 | ✅ 2026-10-31 |
 | 图鉴模块：master.mdb → SQLite 导入 | `modules/catalog/importer.py` | 两份真实 mdb 端到端（日服 / 简中服快照） | ✅ |
 | 真实 `master.mdb` 字段映射验证 | `modules/catalog/importer.py` | 日服快照 111 育成卡 / 262 协助卡 / 731 技能 / 42462 文本；简中服 2026-10 快照 161 / 362 / 1289 / 61801；两份 `skipped` 与 `missing_columns` 均为空 | ✅ |
 | 从本机客户端提取当期数据 | `modules/sync/android.py`（CLI：`scripts/fetch_mdb_android.py`） | 自动定位 adb 与实例 → 校验包名 / root / SQLite 结构 → `adb pull` → 打印 sha256 并比对本地库；`--check` 只比对不写。实测从 MuMu（2.0.2）取到 2026-10-22 快照并重导，`tests/test_fetch_mdb.py` 覆盖 | ✅ |
