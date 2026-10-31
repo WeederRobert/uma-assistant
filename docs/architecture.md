@@ -30,6 +30,7 @@ flowchart TD
         RAC[races<br/>赛事目录 / 赛道几何 / 大赛 / 场地状态]
         SKL[skills<br/>技能条件 / 效果 / 来源反查 / 进化]
         SUC[succession<br/>相性关系组 / 六人布局]
+        CIR[circles<br/>社团粉丝 / 成员贡献（实验性）]
         GAC[gacha<br/>卡池排期 / 精选（面板在日程页）]
         NEXT[后续模块<br/>知识库与结构化数据打通]
     end
@@ -46,6 +47,7 @@ flowchart TD
     M --> RAC
     M --> SKL
     M --> GAC
+    M --> CIR
     CAT --> D
     KB --> D
     EVT --> D
@@ -53,6 +55,7 @@ flowchart TD
     SKL --> D
     SUC --> D
     GAC --> D
+    CIR --> D
     CAT --> V
     KB --> V
     EVT --> V
@@ -60,6 +63,7 @@ flowchart TD
     SKL --> V
     SUC --> V
     GAC --> V
+    CIR --> V
 ```
 
 内核只做四件事：装配（`main.create_app`）、存储（`Database`）、版本（`DataVersion`）、模块生命周期（`ModuleRegistry`）。业务全部在 `modules/` 里，删除任一模块，应用仍能启动。
@@ -113,7 +117,7 @@ sequenceDiagram
 
 | 位置 | 用途 |
 | --- | --- |
-| `data/app.db` | 共享 SQLite（WAL）；`meta` 表 + 各模块的 `catalog_*` / `events_*` / `races_*` / `skills_*` / `succession_*` / `gacha_*` 等表 |
+| `data/app.db` | 共享 SQLite（WAL）；`meta` 表 + 各模块的 `catalog_*` / `events_*` / `races_*` / `skills_*` / `succession_*` / `gacha_*` / `circles_*` 等表 |
 | `data/modules/<id>/` | 模块私有文件（知识库的 `chroma/`、`documents.json`、`uploads/`；日程与赛道的 `cache/` 抓取缓存等） |
 | `data/mdb/master.mdb` | 从设备提取的游戏数据文件留档（`UMA_SYNC_KEEP_MDB=false` 可关） |
 | `data/snapshots/<版本>.json` | 每次数据导入的元信息与校验和，用于回答"这版数据从哪来" |

@@ -168,6 +168,7 @@ uv run python scripts/fetch_mdb_android.py            # 提取到 data/mdb/maste
 | 简中服译名与术语 | 少量新系统缺官方文本 | **已改善**：本地库已换用 S10（2026-10-22，2.0.2）当期文本；新增「觉醒」「剧本」技能分类来自 `skill_upgrade_description` / `skill_upgrade_speciality` 参照表。术语表本身尚未按新数据重跑 | 用 S10 重跑术语提取，更新 [08-glossary.md](./08-glossary.md) |
 | 简中服版本进度、卡池与活动日程 | 助手不能回答「简中服现在到哪个池」 | **已由模块覆盖，不入库**：`events` 模块抓 BWiki 的**简中服**卡池（不跟踪繁中 / 日服，也不跟踪活动），`gacha` 模块读 `master.mdb` 的 `gacha_data`（含未来卡池，可提前预告）；时效数据仍刻意不写入知识库 | 时效数据会过期，只通过模块 + `fetched_at` 展示 |
 | 大赛（CM）当期赛道与规则 | 只能解释赛制，不能给当期作业 | **数据侧已具备**：`champions_schedule`(29) / `champions_round_schedule`(174) / `champions_race_condition`(203) 在 mdb 里，含起止时间、轮次与每轮赛道，已由 `modules/races` 的「大赛（群英联赛）」面板提供。**对手阵容与当届环境使用率仍无来源** | 环境数据需外部统计，不自行编造 |
+| 社团成员每月粉丝与贡献 | 助手不能查任意社团的成员贡献 | **部分覆盖（实验性）**：`circles` 模块读第三方站点 `umamusume.space`，但它只跟踪约 160 个社团，未收录的社团接口返回 404；官方没有开放接口 | 需要更多社团时由用户在站点侧申请收录（QQ 群）；抓包补齐违反合规红线，不做 |
 
 ## 5. 与代码的关系
 

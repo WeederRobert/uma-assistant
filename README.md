@@ -137,6 +137,7 @@ uma-assistant/
 │  ├─ races/             # 赛道：master.mdb 赛事目录 / 大赛排期 / 场地状态 + BWiki 赛道几何
 │  ├─ skills/            # 技能：条件表达式 / 效果参数 / 马娘与协助卡反查 / 进化关系
 │  ├─ succession/        # 相性：两人关系组点数 + 六人继承布局分数与等级
+│  ├─ circles/           # 社团（实验性）：第三方站点公开接口 → 社团月增粉丝与成员贡献占比
 │  ├─ gacha/             # 卡池：master.mdb 排期（含未来卡池）与精选卡片，面板并入「日程」页
 │  └─ _template/         # 新模块脚手架（下划线开头不会被加载）
 ├─ static/               # 前端壳：侧栏、路由、数据版本徽标
@@ -169,6 +170,7 @@ uma-assistant/
 | 技能 | 条件表达式、效果参数、马娘与协助卡反查、进化关系全部来自 `master.mdb`；没有字典表的枚举只回显原始编号，`skill_set` 这条退化的反查链路明确弃用 | [docs/skills.md](docs/skills.md) |
 | 图鉴详情 | `master.mdb` 的 `available_skill_set`（马娘技能组 + 解锁星级）、`support_card_limit`（各稀有度 0–4 突的等级上限）、`text_data` 151/154（效果类型名称与说明）、`support_card_effect_table`（各等级数值，折算成突破表）、`support_card_unique_effect` + `text_data` 155（固有加成与发动条件）、`single_mode_hint_gain`（提示技能） | [docs/catalog.md](docs/catalog.md) |
 | 相性 | `master.mdb` 的 `succession_relation` / `_member` / `_rank`（2133 组 / 4527 成员 / 3 档），两人点数与六人布局分数；明确不含适性（主数据无适性表） | [docs/succession.md](docs/succession.md) |
+| 社团粉丝（实验性） | 第三方站点 `umamusume.space` 的公开只读接口：社团当月增粉 + 逐成员贡献占比；数据由玩家自采、非官方，站点未收录的社团查不到，接口改版即失效 | [docs/circles.md](docs/circles.md) |
 | 卡池预告 | `master.mdb` 的 `gacha_data`／`text_data`／`gacha_available` 给出卡池排期与精选，含尚未开放的未来卡池（当期快照排到 2027-01-18），已用 BWiki 当期卡池交叉验证；面板并入「日程」页 | [docs/gacha.md](docs/gacha.md) |
 | 日志 | 控制台 + `data/logs/app.log`，`RotatingFileHandler` 1 MB × 3 份；uvicorn 也走同一份配置 | — |
 | 打包发布 | PyInstaller 出**精简版**（44 MB，不含 ML 依赖）；`UMA_BUNDLE_ML=1` 出完整版；CI 在 `windows-latest` 上出包并跑启动冒烟 | [docs/packaging.md](docs/packaging.md) |
@@ -189,6 +191,7 @@ uma-assistant/
 | `races` | 赛事目录 / 大赛排期 / 场地状态（`master.mdb`）+ 赛道几何（BWiki），查分段、坡道、终直、轮次窗口与晋级门槛 | `/api/races` |
 | `skills` | 技能条件、效果参数、来源反查（哪些马娘 / 哪些协助卡给）与进化关系，全部来自 `master.mdb`，解析不了的字段回显原始值 | `/api/skills` |
 | `succession` | 相性：两只马娘的共享关系组与点数、六人继承布局总分与等级，数据来自 `master.mdb` 的 `succession_relation*`；不含适性 | `/api/succession` |
+| `circles` | **实验性**：读第三方站点 `umamusume.space` 的公开接口，看社团当月增粉与逐成员贡献占比；数据由玩家自采、非官方，站点未收录的社团查不到 | `/api/circles` |
 | `gacha` | 卡池排期与精选卡片，来自 `master.mdb`（含未来卡池，可提前预告下一期）；**面板并入「日程」页**，本模块只提供接口 | `/api/gacha` |
 
 ## 合规边界
@@ -199,7 +202,7 @@ uma-assistant/
 - 不自动化游戏操作（脚本挂机、自动育成）
 - 不分发游戏本体资源（`master.mdb`、卡面、语音等）；只读取用户本机已有的文件，且不随代码仓库分发
 
-数据来源限于：用户本机的 `master.mdb`、公开 Wiki（如 BWiki）与官方公告。
+数据来源限于：用户本机的 `master.mdb`、公开 Wiki（如 BWiki）、官方公告，以及第三方玩家自建的**公开只读接口**（目前只有实验性的 `circles` 模块，读 `umamusume.space` 的 JSON，不带任何用户数据）。
 
 每条数据从哪来、哪些不随仓库分发、哪些数据会离开本机（只有知识库问答会把问题与检索片段发给 DeepSeek），逐条写在 [docs/data-policy.md](docs/data-policy.md)。
 
