@@ -82,7 +82,7 @@ CI 的 `package` 任务（[`.github/workflows/ci.yml`](../.github/workflows/ci.y
 
 两点说明：
 
-- **生成脚本用 `System.Drawing` 而不是 Pillow**：`pillow` 虽在 `pyproject.toml` 的 dev 组里，但 `uv.lock` 没有收录，`uv run` 会因此重新解析依赖；图标生成不该被这件事卡住。脚本是纯 GDI+，无第三方依赖。
+- **生成脚本用 `System.Drawing`（GDI+）**：不引入第三方依赖，`uv sync` 不用为了一图标多装一个包；脚本自己拼 ICO 容器（BMP 帧 + 256 的 PNG 帧），无外部工具链。
 - **源码模式跑出来的窗口图标仍然是 Python 的**：pywebview 没有暴露设置窗口图标的接口，任务栏图标取自 exe。要看到成品图标就用打包产物（`dist/uma-assistant/uma-assistant.exe`），或在浏览器里看 `favicon.ico` 与侧栏品牌图。
 
 验证：`.\packaging\smoke.ps1 -Exe .\dist\uma-assistant\uma-assistant.exe` 跑通后，用 `[System.Drawing.Icon]::ExtractAssociatedIcon($exe)` 取出的图标应与 `Logo.png` 一致（实测 32×32 提取正常，exe 里能找到 256 帧的 PNG 签名）。

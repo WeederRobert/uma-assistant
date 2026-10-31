@@ -8,8 +8,8 @@
       ..\static\favicon.ico  浏览器标签页：16/32/48
       ..\static\icon.png     256×256，侧栏品牌图与 apple-touch-icon
 
-    只用 System.Drawing，不依赖 Pillow：开发环境里 Pillow 虽在 dev 组声明，但 uv.lock 未收录，
-    `uv run` 会因此重新解析依赖；图标生成不该被这件事卡住。
+    只用 System.Drawing（GDI+），不引入第三方依赖：图标生成不该为了一张图
+    去动依赖清单，也不必让打包机多装一个包。
 #>
 param(
     [string]$Source = (Join-Path $PSScriptRoot "Logo.png")
