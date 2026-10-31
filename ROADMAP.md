@@ -36,7 +36,7 @@
 | 卡池预告模块（`gacha_data` 排期 + 精选 + 未来卡池 + 未定档识别） | `modules/gacha/` | `tests/test_gacha.py`（10 例）；真实库 348 个卡池 / 41 个未来 / 3 个未定档；面板并入「日程」 | ✅ 2026-10-27 |
 | 技能库（条件表达式 + 效果参数 + 反查马娘 / 协助卡 + 进化关系） | `modules/skills/` | `tests/test_skills.py`（15 例）；1289 技能 / 1450 槽位 / 1895 效果 / 345 进化 | ✅ 2026-10-27 |
 | 相性查询（两人关系组点数 + 六人继承布局） | `modules/succession/` | `tests/test_succession.py`（13 例）；真实库 2133 关系组 / 4527 成员 / 95 角色；特别周 × 无声铃鹿 = 27 分 △、六人布局示例 91 分 〇 | ✅ 2026-10-28 |
-| 社团粉丝（**实验性**）：社团当月增粉 + 逐成员贡献占比 | `modules/circles/` | `tests/test_circles.py`（10 例）；真实拉取 159 个社团，颂乐人偶 30 人合计 158.72 亿 vs 榜单 158.73 亿（差 0.0x%）；面板实测搜索 / 展开成员 / 缓存命中 | ✅ 2026-11-01（feature 分支） |
+| 社团粉丝（**实验性**）：社团当月增粉 + 逐成员贡献占比 | `modules/circles/` | `tests/test_circles.py`（10 例）；真实拉取 159 个社团，颂乐人偶 30 人合计 158.72 亿 vs 榜单 158.73 亿（差 0.0x%）；面板实测搜索 / 展开成员 / 缓存命中 | ✅ 2026-11-01（已并入 main） |
 | 赛道几何「切线」口径（首段未列出的开场直线） | `modules/races/geometry.py` | 107 条几何中 12 条带切线，`opening_straight` 入库；`tests/test_races.py` 断言 |
 | 赛事目录与赛道几何（mdb 赛事 1525 场 + BWiki 赛道 107 条分段 / 坡道） | `modules/races/` | `tests/test_races.py`（24 例）；真实刷新 `races=1525 / courses=121 / geometry=107`，4 条源数据缺陷出告警；6 条示例赛道与知识库一致 | ✅ |
 | 知识库素材重复导入的覆盖语义 | `scripts/import_kb.py` | 同名素材内容变化时先删旧版本再导入（`--keep-stale` 可关闭） | ✅ |
@@ -253,19 +253,37 @@ flowchart LR
 | `catalog` | 马娘 / 协助卡 / 技能查询 | 本机 `master.mdb` | — | ✅ v0.1 |
 | `knowledge` | 攻略问答（RAG + LLM） | 用户文档 | — | ✅ v0.1 |
 | `sync` | 数据更新与版本管理 | mdb / BWiki / 公告 | catalog | ✅ v0.3（mdb 部分） |
-| `events` | 日程：简中服卡池抓取 + **卡池与大赛排期汇总页** | BWiki SMW（仅 cn）+ mdb（经 gacha / races 接口） | sync, gacha, races | ✅ v0.3 |
+| `events` | 日程：简中服卡池抓取 + **卡池与大赛排期汇总页**。增强项：卡池与活动月历 | BWiki SMW（仅 cn）+ mdb（经 gacha / races 接口） | sync, gacha, races | ✅ v0.3；月历增强待排期（P2） |
 | `races` | 赛事目录、赛道几何、马场状态出现率、大赛排期 | mdb + BWiki 数据页 | catalog | ✅ v0.5（赛事 / 几何 / 出现率 / 大赛） |
 | `skills` | 技能条件与效果、反查马娘与协助卡、进化技能 | mdb | catalog | ✅ v0.1（P3-3） |
-| `succession` | 相性：两人关系组点数、六人继承布局分数与等级 | mdb | catalog | ✅ v0.1（P3-5） |
-| `circles` | 社团粉丝（实验性）：社团当月增粉、成员贡献占比；面板可展开成员明细 | 第三方 `umamusume.space` 公开只读接口 | — | 🧪 v0.1（仅 feature 分支） |
-| `gacha` | 卡池排期（含未来卡池）、精选卡片、预告；面板并入「日程」页 | mdb | catalog | ✅ v0.1 |
+| `succession` | 相性：两人关系组点数、六人继承布局分数与等级。增强项：三代血统规划器 | mdb | catalog | ✅ v0.1（P3-5）；增强待排期（P2） |
+| `circles` | 社团粉丝（实验性）：社团当月增粉、成员贡献占比；面板可展开成员明细 | 第三方 `umamusume.space` 公开只读接口 | — | 🧪 v0.1（已并入 main） |
+| `planner` | 萝卜 / 券 / 天井预算规划，本地保存多套方案（参考 uma.moe Carat Planner） | 本地计算 + `gacha` 排期 | gacha | 待排期（优先级 P1） |
+| `factors` | 因子图鉴：因子 id / 效果 / 初始因子 | mdb | — | 待排期（优先级 P3） |
+| `gacha` | 卡池排期（含未来卡池）、精选卡片、预告；面板并入「日程」页。增强项：天井 / 兑换 / 碎片 / step-up / 付费池标记 | mdb | catalog | ✅ v0.1；增强待排期（P1） |
 | `support` | 协助卡加成（按突破等级）、固有加成、金技能 | mdb | catalog, skills | P3-4 |
-| `succession` | 相性点数与等级 | mdb | catalog | P3-5 |
-| `roster` | 我的马娘 / 协助卡收藏 | 用户手输 | catalog | 待定 |
+| `roster` | 我的收藏 / 退役马导入 | 用户手输 / 用户文件 | catalog | **不做**（2026-11-01 决定） |
 
-`roster` 是否要做取决于是否有合规的数据录入方式（手动录入可行，读游戏数据不可行），排在 P3 之后再评估。
+`roster` 与「退役马收藏导入」在 2026-11-01 的 uma.moe 盘点里确认**不做**：退役马导出的来源（umadump 类工具）属抓包产物，项目不为它开口子；手动录入的收益又撑不起一个模块。
 
 **已移出计划**：`training`（育成规划）不做，见「不做的事」。
+
+## 功能参考：uma.moe（2026-11-01）
+
+对标国际服站点 <https://uma.moe> 的 10 个入口（Database / Veterans / Clubs / Rankings / Activity / Tierlist / Timeline / Tools），按「数据能不能拿到」分三类，结论如下。原始清单已并入本表后删除。
+
+| uma.moe 功能 | 我们的结论 | 数据来源 |
+| --- | --- | --- |
+| Carat Planner（萝卜 / 券 / 天井规划） | **做**（P1）→ `planner` | 纯本地计算 + `gacha` 排期 |
+| 卡池细节（天井 / 兑换 / 碎片 / step-up / 付费池） | **做**（P1）→ `gacha` 增强 | `gacha_piece` / `gacha_exchange` / `gacha_stepup` / `paid_gacha_button_type` |
+| Lineage Planner（三代血统） | **做**（P2）→ `succession` 增强 | `succession_relation*` |
+| Timeline（卡池 / 活动档期） | **做**（P2）→ `events` 增强为月历；**不做「预测发布」**，mdb 里有真实排期 | BWiki + mdb |
+| Database（继承马库） | 只借交互，**不做社区收藏库**；因子本体走 `factors`（P3） | `succession_factor*` |
+| Tierlist（支援卡梯度） | 不做「官方梯度」；如要做只能标为自定权重 | `support_card_effect_table` |
+| Team Stadium 统计 | 规则表可做，**社区使用率不做**（需要玩家样本） | `team_stadium*` |
+| Veterans（退役马工作台） | **不做**：导出依赖抓包工具 | — |
+| Rankings（训练员粉丝榜） | **不做**：无公开数据源 | — |
+| Activity（Top 100 可疑分） | **不做**：给玩家打分社区风险高 | — |
 
 ## 技术债
 
@@ -297,6 +315,8 @@ flowchart LR
 - 注入 / Hook 游戏客户端，读内存、抓包、解密资源
 - 自动化游戏操作（挂机、自动育成、模拟点击）
 - 分发游戏本体资源（`master.mdb`、卡面、语音）
+- 内置退役马 / 账号数据导出（等同内置 umadump）或导入其抓包产物
+- 给玩家打「疑似开挂 / 自动化」分
 - 提供跨服数据混用而不标注来源
 
 **育成规划（属性分配 / 回合计划 / 训练侧重建议）也从计划中移除**，原因：
