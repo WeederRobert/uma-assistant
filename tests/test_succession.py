@@ -15,7 +15,8 @@ from modules.succession.service import SuccessionService
 from modules.succession.settings import SuccessionSettings
 
 # 关系组设计：101 只有 1001；202 有 1001+1002；3003 有 1001+1002+1003；
-# 3101 有 1001+1002（7 点）；510 只有 1002；9999 只有 1003+1004
+# 3101 有 1001+1002（7 点）；510 只有 1002；9999 只有 1003+1004；
+# 7777 只有 1005+1006+1007——给祖父母位准备足够的互不相同的角色。
 RELATIONS = [
     (101, 2),
     (202, 2),
@@ -23,6 +24,7 @@ RELATIONS = [
     (3101, 7),
     (510, 8),
     (9999, 1),
+    (7777, 3),
 ]
 MEMBERS = [
     (101, 1001),
@@ -36,8 +38,19 @@ MEMBERS = [
     (510, 1002),
     (9999, 1003),
     (9999, 1004),
+    (7777, 1005),
+    (7777, 1006),
+    (7777, 1007),
 ]
-NAMES = {1001: "特别周", 1002: "无声铃鹿", 1003: "东海帝王", 1004: "丸善斯基"}
+NAMES = {
+    1001: "特别周",
+    1002: "无声铃鹿",
+    1003: "东海帝王",
+    1004: "丸善斯基",
+    1005: "黄金船",
+    1006: "目白麦昆",
+    1007: "鲁道夫象征",
+}
 
 
 def build_mdb(path: Path, *, drop_rank: bool = False) -> Path:
@@ -110,11 +123,11 @@ def service(db: Database, settings: Settings) -> SuccessionService:
 def test_import_counts(service: SuccessionService, mdb: Path) -> None:
     summary = import_catalog(service.db, mdb)
 
-    assert summary.relations == 6
+    assert summary.relations == 7
     assert summary.members == len(MEMBERS)
     assert summary.ranks == 3
-    assert summary.charas == 4
-    assert service.status()["counts"]["charas"] == 4
+    assert summary.charas == 7
+    assert service.status()["counts"]["charas"] == 7
 
 
 def test_pair_sums_shared_groups(service: SuccessionService, mdb: Path) -> None:
@@ -178,7 +191,7 @@ def test_layout_accumulates_six_slots(service: SuccessionService, mdb: Path) -> 
         {
             "target": 1001,
             "parents": [1002, 1003],
-            "grandparents": [1004, 1004, 1004, 1004],
+            "grandparents": [1004, 1005, 1006, 1007],
         }
     )
 
@@ -215,6 +228,44 @@ def test_layout_rejects_duplicate_parents(service: SuccessionService, mdb: Path)
         service.layout({"target": 1001, "parents": [1002, 1002], "grandparents": []})
 
     assert "三个不同角色" in str(excinfo.value)
+
+
+def test_layout_rejects_duplicate_grandparents(service: SuccessionService, mdb: Path) -> None:
+    import_catalog(service.db, mdb)
+
+    with pytest.raises(ValueError) as excinfo:
+        service.layout(
+            {"target": 1001, "parents": [1002, 1003], "grandparents": [1004, 1004]}
+        )
+
+    assert "祖父母不能重复" in str(excinfo.value)
+    assert "丸善斯基" in str(excinfo.value)
+
+
+def test_layout_rejects_grandparent_equal_to_parent(service: SuccessionService, mdb: Path) -> None:
+    import_catalog(service.db, mdb)
+
+    with pytest.raises(ValueError) as excinfo:
+        service.layout({"target": 1001, "parents": [1002, 1003], "grandparents": [1002]})
+
+    assert "祖父母不能与父母" in str(excinfo.value)
+    assert "无声铃鹿" in str(excinfo.value)
+
+
+def test_layout_allows_target_as_grandparent(service: SuccessionService, mdb: Path) -> None:
+    """目标与祖父母同角色是合法布局，只是该位按 0 分计。"""
+    import_catalog(service.db, mdb)
+
+    data = service.layout(
+        {"target": 1001, "parents": [1002, 1003], "grandparents": [1001, 1004, 1005, 1006]}
+    )
+
+    slots = {item["slot"]: item for item in data["slots"]}
+    assert slots["3"]["zeroed"] is True
+    assert slots["3"]["subtotal"] == 0
+    assert slots["4"]["zeroed"] is False
+    assert data["total"] == 30
+    assert data["missing_grandparents"] == 0
 
 
 def test_missing_source_table_raises(settings: Settings, tmp_path: Path) -> None:
@@ -256,7 +307,7 @@ def test_refresh_skips_when_not_stale(service: SuccessionService, mdb: Path) -> 
     stamp = mdb.stat().st_mtime + 60
     os.utime(mdb, (stamp, stamp))
     assert service.status()["stale"] is True
-    assert service.refresh()["counts"]["relations"] == 6
+    assert service.refresh()["counts"]["relations"] == 7
 
 
 def test_api_serves_pair_and_layout(db: Database, settings: Settings, mdb: Path) -> None:
@@ -273,6 +324,13 @@ def test_api_serves_pair_and_layout(db: Database, settings: Settings, mdb: Path)
         assert client.get("/api/succession/pairs", params={"a": 1001, "b": 1001}).status_code == 422
         assert client.get("/api/succession/pairs", params={"a": 1001, "b": 7777}).status_code == 404
 
+        bad_layout = client.get(
+            "/api/succession/layout",
+            params={"target": 1001, "parent1": 1002, "parent2": 1003, "g1": 1004, "g2": 1004},
+        )
+        assert bad_layout.status_code == 422
+        assert "祖父母不能重复" in bad_layout.json()["detail"]
+
         layout = client.get(
             "/api/succession/layout",
             params={"target": 1001, "parent1": 1002, "parent2": 1003, "g1": 1004},
@@ -281,5 +339,5 @@ def test_api_serves_pair_and_layout(db: Database, settings: Settings, mdb: Path)
         assert layout["missing_grandparents"] == 3
 
         status = client.get("/api/succession/status").json()
-        assert status["counts"]["relations"] == 6
+        assert status["counts"]["relations"] == 7
         assert any("不含适性" in note for note in status["notes"])

@@ -8,7 +8,9 @@
   它正好是 1 号位（父母之一）的贡献，而不是游戏内显示的最终相性。
 - **六人布局**按社区计算器（BWiki「相性计算器计算方法」，见知识库 06）的分槽口径累加：
   1 号 = f(0,1)；2 号 = f(0,2) + f(1,2)；3/4 号 = f(0,1,祖父母)，与 0 号同角色时记 0；
-  5/6 号 = f(0,2,祖父母)，同理。**这是社区口径，不是官方公式。**
+  5/6 号 = f(0,2,祖父母)，同理。祖父母之间、祖父母与父母之间都不能是同一角色
+  （重复选择会让同一批关系组被重复计分），目标与祖父母同角色则允许、该位记 0。
+  **这是社区口径，不是官方公式。**
 - **不含适性（马场 / 距离 / 跑法契合）**：主数据里没有适性表（``%aptitude%`` 查不到，
   ``%proper%`` 只有赛事侧的出现率表），所以算不出来，也不假设计算。
 """
@@ -16,6 +18,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +40,8 @@ NOTE_PAIR = (
 )
 NOTE_LAYOUT = (
     "按社区计算器口径累加六个位置：1 号 = f(0,1)；2 号 = f(0,2) + f(1,2)；"
-    "3/4 号 = f(0,1,祖父母)；5/6 号 = f(0,2,祖父母)，祖父母与目标同角色时该部分记 0 分。"
+    "3/4 号 = f(0,1,祖父母)；5/6 号 = f(0,2,祖父母)。祖父母之间、祖父母与父母之间不能是"
+    "同一角色（重复选择会把同一批关系组重复计分）；目标与某个祖父母同角色时该部分记 0 分。"
     "这是社区口径，不是官方公式；不含适性加成，也没有算「继承马娘赢过的 G1 有交集」这类额外项。"
 )
 NOTE_RELATIONS = (
@@ -166,6 +170,16 @@ class SuccessionService:
             row["chara_id"]: row["name"] for row in [target_row, *parent_rows, *grandparent_rows]
         }
 
+        # 同一角色重复占两个祖父母位会把同一批关系组重复计分；
+        # 祖父母与父母同角色则等价于把父辈的分数再算一遍，都不是游戏里的合法布局。
+        repeated = {cid for cid in grandparent_ids if grandparent_ids.count(cid) > 1}
+        if repeated:
+            raise ValueError(f"祖父母不能重复选同一角色：{self._name_list(repeated, names)}。")
+        parent_ids = {row["chara_id"] for row in parent_rows}
+        clashes = parent_ids & set(grandparent_ids)
+        if clashes:
+            raise ValueError(f"祖父母不能与父母是同一角色：{self._name_list(clashes, names)}。")
+
         entries: list[dict[str, Any]] = []
 
         def add(slot: str, ids: list[int], label: str, *, zeroed: bool = False) -> int:
@@ -212,6 +226,10 @@ class SuccessionService:
         }
 
     # ------------------------------------------------------------------ 内部
+    @staticmethod
+    def _name_list(chara_ids: Iterable[int], names: dict[int, str]) -> str:
+        return "、".join(names.get(item, f"#{item}") for item in sorted(chara_ids))
+
     def _require(self, chara_id: int) -> dict[str, Any]:
         row = store.get_chara(self.db, chara_id)
         if row is None:

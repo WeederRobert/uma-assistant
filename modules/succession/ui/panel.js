@@ -84,6 +84,7 @@ export default {
           <label>祖父母 3 <select id="succ-g3" style="min-width:120px"></select></label>
           <label>祖父母 4 <select id="succ-g4" style="min-width:120px"></select></label>
         </div>
+        <p class="hint" style="margin:6px 0 0">祖父母之间、祖父母与父母之间不能是同一角色；目标与某个祖父母同角色时该位按 0 分计（不会被拒绝）。</p>
         <div class="toolbar" style="margin-top:10px">
           <button class="primary" id="succ-layout">计算布局</button>
           <span class="hint" id="succ-layout-hint"></span>
@@ -128,6 +129,8 @@ export default {
       refreshResultEl.hidden = !text;
     }
 
+    const GRANDPARENT_KEYS = ["g1", "g2", "g3", "g4"];
+
     // 选错组合时直接禁用按钮并说明原因，比点下去再报 422 友好
     function syncPairButton() {
       const same = selects.a.value === selects.b.value;
@@ -136,10 +139,21 @@ export default {
     }
 
     function syncLayoutButton() {
-      const picked = [selects.target.value, selects.p1.value, selects.p2.value];
-      const distinct = new Set(picked).size === 3 && picked.every(Boolean);
-      layoutBtn.disabled = !distinct;
-      layoutHintEl.textContent = distinct ? "" : "目标与两位父母必须是三个不同角色";
+      const parents = [selects.p1.value, selects.p2.value];
+      const grandparents = GRANDPARENT_KEYS.map((key) => selects[key].value).filter(Boolean);
+      const core = [selects.target.value, ...parents];
+      const problems = [];
+      if (core.some((value) => !value) || new Set(core).size !== 3) {
+        problems.push("目标与两位父母必须是三个不同角色");
+      }
+      if (new Set(grandparents).size !== grandparents.length) {
+        problems.push("四位祖父母不能重复选同一角色");
+      }
+      if (grandparents.some((value) => parents.includes(value))) {
+        problems.push("祖父母不能与父母是同一角色");
+      }
+      layoutBtn.disabled = problems.length > 0;
+      layoutHintEl.textContent = problems.join("；");
     }
 
     // 改了选择就把上一次的结果清掉，避免上下两块对不上
@@ -313,7 +327,7 @@ export default {
     root.querySelector("#succ-layout").addEventListener("click", calcLayout);
     selects.a.addEventListener("change", resetPair);
     selects.b.addEventListener("change", resetPair);
-    for (const key of ["target", "p1", "p2"]) {
+    for (const key of ["target", "p1", "p2", ...GRANDPARENT_KEYS]) {
       selects[key].addEventListener("change", resetLayout);
     }
     root.querySelector("#succ-refresh").addEventListener("click", async (event) => {
