@@ -85,7 +85,7 @@ export default {
       <section class="card">
         <h2>数据来源</h2>
         <div class="toolbar" style="margin-bottom:8px">
-          <button class="primary" id="events-refresh">刷新 BWiki</button>
+          <button class="ghost" id="events-refresh">刷新 BWiki</button>
           <span class="hint" id="events-last"></span>
         </div>
         <details id="events-sources-details">
@@ -103,7 +103,7 @@ export default {
         <h2>卡池（master.mdb 排期）</h2>
         <p class="hint" style="margin-top:0">来自客户端内置排期，含还没开放的未来卡池，所以能提前看到下一期精选；实际开放时间以游戏内公告为准。BWiki 抓到的简中服已开始卡池仍在下方时间轴。</p>
         <div class="toolbar">
-          <button id="gacha-refresh">刷新卡池排期</button>
+          <button class="ghost" id="gacha-refresh">刷新卡池排期</button>
           <label><input id="gacha-ended" type="checkbox" /> 显示最近已结束</label>
           <span class="hint" id="gacha-hint"></span>
         </div>
@@ -361,6 +361,37 @@ export default {
     }
 
     // ---------------------------------------------------------------- 卡池
+    // 「+N」这种折叠标签要能点开：按卡池 id 记住展开状态，重渲染时保留
+    const expandedPickups = new Set();
+
+    function pickupTags(item) {
+      const all = item.pickups || [];
+      if (!all.length) return `<span class="tag muted">无精选卡片</span>`;
+      const key = String(item.gacha_id);
+      const open = expandedPickups.has(key);
+      const shown = open ? all : all.slice(0, 4);
+      const tags = shown
+        .map(
+          (row) =>
+            `<span class="tag">${escapeHtml(row.card_type_label)} · ${escapeHtml(
+              row.name || `未收录 #${row.card_id}`,
+            )}${row.title ? ` ${escapeHtml(row.title)}` : ""}</span>`,
+        )
+        .join(" ");
+      const hiddenCount = all.length - shown.length;
+      // 大杂烩池（必得、新春之类）精选几十张，默认只列 4 张，剩下的折成可点的「+N」
+      const toggle = open
+        ? ` <button type="button" class="tag muted" data-pickups="${escapeHtml(
+            key,
+          )}" aria-expanded="true">收起</button>`
+        : hiddenCount > 0
+          ? ` <button type="button" class="tag muted" data-pickups="${escapeHtml(
+              key,
+            )}" aria-expanded="false" aria-label="展开其余 ${hiddenCount} 张精选">+${hiddenCount}</button>`
+          : "";
+      return tags + toggle;
+    }
+
     function gachaRow(item) {
       const tone = item.permanent
         ? "info"
@@ -385,20 +416,7 @@ export default {
         : item.state === "unscheduled"
           ? `记录时间 ${shortTime(item.starts_local)} → ${shortTime(item.ends_local)}（客户端占位）`
           : `${shortTime(item.starts_local)} → ${shortTime(item.ends_local)}`;
-      const pickups = (item.pickups || []).length
-        ? item.pickups
-            .slice(0, 4)
-            .map(
-              (row) =>
-                `<span class="tag">${escapeHtml(row.card_type_label)} · ${escapeHtml(
-                  row.name || `未收录 #${row.card_id}`,
-                )}${row.title ? ` ${escapeHtml(row.title)}` : ""}</span>`,
-            )
-            .join(" ") +
-          (item.pickups.length > 4
-            ? ` <span class="tag muted">+${item.pickups.length - 4}</span>`
-            : "")
-        : `<span class="tag muted">无精选卡片</span>`;
+      const pickups = pickupTags(item);
       return `
         <div class="list-row">
           <div>
@@ -704,6 +722,16 @@ export default {
     });
 
     gachaEndedEl.addEventListener("change", renderGacha);
+
+    // 点「+N」看这张卡池的全部精选，再点「收起」
+    gachaBodyEl.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-pickups]");
+      if (!button) return;
+      const key = button.dataset.pickups;
+      if (expandedPickups.has(key)) expandedPickups.delete(key);
+      else expandedPickups.add(key);
+      renderGacha();
+    });
 
     // 长列表的「展开其余 N 条」：由根节点代理，各渲染函数只负责切片与按钮
     root.addEventListener("click", (event) => {

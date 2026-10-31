@@ -28,7 +28,7 @@ uv run python scripts/fetch_mdb_android.py --check      # 只看有没有新版�
 uv run python scripts/fetch_mdb_android.py              # 提取到 data/mdb/master.mdb
 ```
 
-界面里对应「数据同步」页：检查客户端 → 导入这一版，或直接选文件上传。
+界面里对应概览页的「数据版本」卡：检查客户端 → 导入这一版，或直接选文件上传（`manifest.toml` 的 `[ui] hidden = true`，所以模块有面板但不占侧栏）。
 
 ## 需求
 

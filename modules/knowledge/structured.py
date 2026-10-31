@@ -26,6 +26,12 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+
+def _plus(value: Any) -> str:
+    """加成数值一律带正号；没有这一项（None）时用破折号。"""
+    return "—" if value is None else f"+{value}"
+
+
 # 话题 → 关键词（命中即认为在问该话题）。顺序有意义：大赛要先查，
 # 因为「这届大赛的赛道」需要先拿到大赛记录里的 course_id
 TOPICS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -354,14 +360,26 @@ class StructuredLookup:
         lines = [f"{detail.get('name')}{title}（{kind} #{detail.get('id')}）"]
         for row in (detail.get("attributes") or [])[:5]:
             lines.append(f"{row.get('label')}：{row.get('value')}")
-        for effect in (detail.get("effects") or [])[:4]:
+        # 训练效果按突破档位给：0 突与满突两端最能说明「练上去能涨多少」
+        breakthroughs = detail.get("breakthroughs") or {}
+        caps = breakthroughs.get("level_caps") or []
+        for row in (breakthroughs.get("rows") or [])[:4]:
+            values = row.get("values") or []
+            if not values or not caps:
+                continue
             lines.append(
-                f"训练效果 {effect.get('label')}：初始 {effect.get('init')} · "
-                f"满破 {effect.get('max')} · 净增 {effect.get('gain')}"
+                f"训练效果 {row.get('label')}：0 突（{caps[0]} 级）{_plus(values[0])} → "
+                f"{len(caps) - 1} 突（{caps[-1]} 级）{_plus(values[-1])}"
             )
-        for effect in (detail.get("unique_effects") or [])[:2]:
-            unlock = f"（{effect.get('need_lv')} 级解锁）" if effect.get("need_lv") else ""
-            lines.append(f"固有加成 {effect.get('label')}：{effect.get('value')}{unlock}")
+        unique = detail.get("unique") or {}
+        if unique.get("text") or unique.get("items"):
+            unlock = f"（{unique.get('need_lv')} 级解锁）" if unique.get("need_lv") else ""
+            described = (unique.get("text") or "").replace("\n", " ").strip()
+            items = "、".join(
+                f"{item.get('label')} {_plus(item.get('value'))}"
+                for item in (unique.get("items") or [])
+            )
+            lines.append(f"固有加成 {described or items}{unlock}")
         if detail.get("skills"):
             names = "、".join(row.get("name") or "?" for row in detail["skills"][:5])
             key = "技能" if kind == "character" else "提示技能"

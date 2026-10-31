@@ -86,7 +86,7 @@ export default {
       <section class="card">
         <h2>数据来源</h2>
         <div class="toolbar">
-          <button class="primary" id="races-refresh">刷新赛道数据</button>
+          <button class="ghost" id="races-refresh">刷新赛道数据</button>
           <span class="hint" id="races-refresh-hint"></span>
         </div>
         <dl class="kv" id="races-source"></dl>
@@ -102,7 +102,7 @@ export default {
           <label>距离 <input id="f-min" type="number" min="800" max="4000" step="100" placeholder="最短" style="width:82px" />
             – <input id="f-max" type="number" min="800" max="4000" step="100" placeholder="最长" style="width:82px" /></label>
           <label><input id="f-geometry" type="checkbox" /> 仅有几何数据</label>
-          <button id="f-clear">重置</button>
+          <button class="ghost" id="f-clear">重置</button>
         </div>
         <div class="hint" id="races-courses-count"></div>
         <div class="list grid" id="races-courses"></div>
@@ -118,7 +118,7 @@ export default {
         <div class="toolbar">
           <input id="races-query" type="search" placeholder="赛事名关键词，例如 德比 / 纪念 / 锦标赛" />
           <label><input id="races-official" type="checkbox" checked /> 只看正式赛事</label>
-          <button id="races-search">查询</button>
+          <button class="primary" id="races-search">查询</button>
         </div>
         <div class="hint" id="races-list-hint"></div>
         <div class="list grid" id="races-list"></div>

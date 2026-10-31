@@ -24,13 +24,46 @@ function datasetLine(datasets) {
 export default {
   async mount(root, ctx) {
     const { api, escapeHtml, toast, refreshInfo, createLimiter } = ctx;
+    // 概览页把它嵌在「数据版本」卡里：不渲染页面标题，也不再套一层卡片
+    const embedded = Boolean(ctx.embedded);
     const limiter = createLimiter(6);
     let status = null;
     let history = [];
     let check = null;
     let device = null;
 
-    root.innerHTML = `
+    const deviceBody = `
+      <div class="toolbar" style="margin-bottom:0">
+        <button class="primary" id="sync-check">检查客户端</button>
+        <button class="ghost" id="sync-apply" disabled>导入这一版</button>
+      </div>
+      <div class="hint" id="sync-device" style="margin-top:10px"></div>
+      <div class="hint" id="sync-check-result" style="margin-top:6px"></div>`;
+    const uploadBody = `
+      <div class="toolbar">
+        <label class="file-picker" for="sync-file">选择 master.mdb</label>
+        <input type="file" id="sync-file" class="visually-hidden" accept=".mdb,.db,.sqlite" />
+        <span class="hint" id="sync-file-label">未选择文件</span>
+        <input type="text" id="sync-game-version" placeholder="游戏版本（可选）" style="width:150px" />
+        <input type="text" id="sync-data-version" placeholder="数据版本（可选）" style="width:190px" />
+        <button class="primary" id="sync-upload">导入</button>
+      </div>
+      <div class="answer" id="sync-result">导入结果会显示在这里。</div>`;
+    const historyBody = `
+      <div class="hint" id="sync-history-hint"></div>
+      <div class="list" id="sync-history"></div>`;
+    const block = (title, body) =>
+      embedded
+        ? `<div><h3>${title}</h3>${body}</div>`
+        : `<section class="card"><h2>${title}</h2>${body}</section>`;
+
+    root.innerHTML = embedded
+      ? `<div class="grid">
+          ${block("从本机客户端更新", deviceBody)}
+          ${block("从文件导入", uploadBody)}
+          ${block("历史快照", historyBody)}
+        </div>`
+      : `
       <h1 class="page-title">数据同步</h1>
       <p class="page-desc">数据来自你本机已安装的游戏客户端。导入后图鉴与知识库立刻反映新版本，每次导入都会留一条快照。</p>
       <div class="grid two">
@@ -39,36 +72,12 @@ export default {
           <dl class="kv" id="sync-version"></dl>
           <div class="hint" id="sync-extra" style="margin-top:12px"></div>
         </section>
-        <section class="card">
-          <h2>从本机客户端更新</h2>
-          <div class="toolbar" style="margin-bottom:0">
-            <button class="primary" id="sync-check">检查客户端</button>
-            <button class="ghost" id="sync-apply" disabled>导入这一版</button>
-          </div>
-          <div class="hint" id="sync-device" style="margin-top:10px"></div>
-          <div class="hint" id="sync-check-result" style="margin-top:6px"></div>
-        </section>
+        ${block("从本机客户端更新", deviceBody)}
       </div>
       <div class="grid" style="margin-top:16px">
-        <section class="card">
-          <h2>从文件导入</h2>
-          <div class="toolbar">
-            <label class="file-picker" for="sync-file">选择 master.mdb</label>
-            <input type="file" id="sync-file" class="visually-hidden" accept=".mdb,.db,.sqlite" />
-            <span class="hint" id="sync-file-label">未选择文件</span>
-            <input type="text" id="sync-game-version" placeholder="游戏版本（可选）" style="width:150px" />
-            <input type="text" id="sync-data-version" placeholder="数据版本（可选）" style="width:190px" />
-            <button class="primary" id="sync-upload">导入</button>
-          </div>
-          <div class="answer" id="sync-result">导入结果会显示在这里。</div>
-        </section>
-        <section class="card">
-          <h2>历史快照</h2>
-          <div class="hint" id="sync-history-hint"></div>
-          <div class="list" id="sync-history"></div>
-        </section>
-      </div>
-    `;
+        ${block("从文件导入", uploadBody)}
+        ${block("历史快照", historyBody)}
+      </div>`;
 
     const versionEl = root.querySelector("#sync-version");
     const extraEl = root.querySelector("#sync-extra");
@@ -93,6 +102,8 @@ export default {
     const dataVersionEl = root.querySelector("#sync-data-version");
 
     function renderStatus() {
+      // 嵌在概览卡里时，版本信息由外层的「数据版本」卡显示
+      if (!versionEl || !extraEl) return;
       const data = status?.data_version || {};
       const rows = [
         ["版本", data.version || "未知"],

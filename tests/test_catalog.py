@@ -11,6 +11,7 @@ from app.kernel.database import Database
 from app.main import create_app
 from modules.catalog.importer import MasterMdbError, import_master_mdb
 from modules.catalog.labels import attributes
+from modules.catalog.service import CatalogService
 
 
 def _build_mdb(
@@ -89,6 +90,14 @@ def _build_mdb(
             type_1 INTEGER,
             value_1 INTEGER
         );
+        CREATE TABLE support_card_limit (
+            rarity INTEGER PRIMARY KEY,
+            limit_0 INTEGER NOT NULL,
+            limit_1 INTEGER NOT NULL,
+            limit_2 INTEGER NOT NULL,
+            limit_3 INTEGER NOT NULL,
+            limit_4 INTEGER NOT NULL
+        );
         CREATE TABLE single_mode_hint_gain (
             id INTEGER PRIMARY KEY,
             support_card_id INTEGER NOT NULL,
@@ -105,6 +114,13 @@ def _build_mdb(
         (47, 200001, "末脚"),
         (48, 200001, "在最终直线提升速度"),
         (76, 30001, "先行花开"),
+        # 效果类型字典：官方措辞与 BWiki 的兜底名不同（14 → 初始友情槽提升）
+        (151, 1, "友情加成"),
+        (151, 8, "训练效果提升"),
+        (151, 14, "初始友情槽提升"),
+        (154, 1, "提升友情训练时的效果"),
+        # 固有加成文案：条件型加成把发动条件写在句子里（30002）
+        (155, 30002, "友情槽达到80时\\n训练效果提升"),
     ]
     if include_second_skill:
         texts.append((47, 200002, "逃亡者"))
@@ -126,6 +142,11 @@ def _build_mdb(
         "INSERT INTO support_card_data (id, chara_id, rarity, support_card_type, skill_set_id) "
         "VALUES (30001, 1002, 3, 2, 100)"
     )
+    # 30002：条件型固有加成（type 101），没有训练效果数据
+    conn.execute(
+        "INSERT INTO support_card_data (id, chara_id, rarity, support_card_type, skill_set_id) "
+        "VALUES (30002, 1001, 3, 1, 101)"
+    )
     # card_data.available_skill_set_id 是这张卡自己的 id（真实库里 100101 → 100101）
     conn.executemany(
         "INSERT INTO available_skill_set (id, available_skill_set_id, skill_id, need_rank) "
@@ -144,6 +165,8 @@ def _build_mdb(
         [
             (30001, 1, 5, -1, -1, 10, 10, -1, -1, 15, -1, -1, -1),
             (30001, 8, -1, 5, -1, 15, 15, -1, -1, 20, -1, -1, -1),
+            # 官方字典与 BWiki 兜底名不一致的类型，用来验证字典优先
+            (30001, 14, -1, 10, -1, 15, 15, -1, -1, 20, -1, -1, -1),
             # 未收录的效果类型：必须回显原始编号而不是编名字
             (30001, 99, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1),
         ],
@@ -151,7 +174,17 @@ def _build_mdb(
     conn.executemany(
         "INSERT INTO support_card_unique_effect (id, lv, type_0, value_0, type_1, value_1) "
         "VALUES (?, ?, ?, ?, ?, ?)",
-        [(30001, 25, 2, 15, 99, 7)],
+        [(30001, 25, 2, 15, 99, 7), (30002, 30, 101, 80, 0, 0)],
+    )
+    # 等级上限：0–4 突（真实 master.mdb 的 support_card_limit）
+    conn.executemany(
+        "INSERT INTO support_card_limit (rarity, limit_0, limit_1, limit_2, limit_3, limit_4) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            (1, 20, 25, 30, 35, 40),
+            (2, 25, 30, 35, 40, 45),
+            (3, 30, 35, 40, 45, 50),
+        ],
     )
     conn.executemany(
         "INSERT INTO single_mode_hint_gain (id, support_card_id, hint_gain_type, hint_value_1) "
@@ -181,11 +214,14 @@ def test_import_and_query(settings: Settings, tmp_path: Path) -> None:
         db.close()
 
     assert summary.characters == 2
-    assert summary.support_cards == 1
+    assert summary.support_cards == 2
     assert summary.skills == 2
     assert summary.character_skills == 3, "2001 有 2 个技能，2002 有 1 个"
-    assert summary.support_effects == 3
-    assert summary.support_unique == 2, "一行两个槽位"
+    assert summary.support_effects == 4
+    assert summary.support_limits == 3, "R / SR / SSR 各一行"
+    assert summary.support_effect_types == 3, "text_data 151 的三条名称"
+    assert summary.support_unique == 3, "30001 两个槽位 + 30002 一个（type_1 = 0 是空槽）"
+    assert summary.support_unique_text == 1, "只有 30002 有 category 155 文案"
     assert summary.support_skills == 1, "只取 hint_gain_type = 0"
     assert summary.data_version == "mdb-1.15.5"
     assert summary.skipped == {}
@@ -241,12 +277,47 @@ def test_import_and_query(settings: Settings, tmp_path: Path) -> None:
         assert effects[1]["init"] == 5
         assert effects[1]["levels"] == {"15": 10, "20": 10, "35": 15}, "JSON 的等级键是字符串"
         assert effects[1]["max"] == 15
-        assert effects[99]["label"] == "原始值 99", "无字典表的类型不能编名字"
+        # 主数据 151 有名字时用官方措辞，不被 BWiki 的「初期羁绊计量格提升」覆盖
+        assert effects[14]["label"] == "初始友情槽提升"
+        assert effects[99]["label"] == "原始值 99", "字典里没有的类型不能编名字"
         unique = {row["slot"]: row for row in card_detail["unique_effects"]}
         assert unique[0]["label"] == "干劲效果提升"
         assert unique[0]["value"] == 15
         assert unique[0]["need_lv"] == 25
+        assert unique[0]["kind"] == "plain"
         assert unique[1]["label"] == "原始值 99"
+        # 固有加成块：普通槽位给数值，生效等级换算成「第几突起」
+        card_unique = card_detail["unique"]
+        assert card_unique["conditional"] is False
+        assert card_unique["need_lv"] == 25
+        assert card_unique["unlock_breakthrough"] == 0, "SSR 0 突上限 30 级，25 级够用"
+        assert card_unique["text"] is None, "没有 category 155 时不给文案"
+        assert card_unique["items"] == [
+            {"label": "干劲效果提升", "value": 15},
+            {"label": "原始值 99", "value": 7},
+        ]
+
+        # 突破表：列为 0–4 突，单元格是「升到该档等级上限」时的值
+        breakthroughs = card_detail["breakthroughs"]
+        assert breakthroughs["level_caps"] == [30, 35, 40, 45, 50]
+        rows = {row["label"]: row["values"] for row in breakthroughs["rows"]}
+        # 30001 是 SSR：15/20 级的值在 30 级上限下已生效，35 级档再涨一档
+        assert rows["友情加成"] == [10, 15, 15, 15, 15]
+        assert rows["训练效果提升"] == [15, 20, 20, 20, 20]
+        assert rows["初始友情槽提升"] == [15, 20, 20, 20, 20]
+        assert rows["原始值 99"] == [3, 3, 3, 3, 3]
+        assert len(rows) == 4, "固有效果不随突破档位变化，不进突破表"
+
+        # 条件型固有加成（type 101）：只有官方文案，不给可换算的数值
+        conditional = client.get("/api/catalog/items/support_card/30002").json()
+        conditional_unique = conditional["unique"]
+        assert conditional_unique["conditional"] is True
+        assert conditional_unique["items"] == [], "条件型加成的 value 是条件参数，不当数值用"
+        assert conditional_unique["text"] == "友情槽达到80时\n训练效果提升"
+        assert conditional_unique["need_lv"] == 30
+        assert conditional_unique["unlock_breakthrough"] == 0
+        assert conditional["breakthroughs"]["rows"] == [], "30002 没有训练效果数据"
+
         assert [row["name"] for row in card_detail["skills"]] == ["逃亡者"]
         assert "支援卡效果一览" in card_detail["effect_source"]
 
@@ -258,6 +329,49 @@ def test_import_and_query(settings: Settings, tmp_path: Path) -> None:
 
         missing = client.get("/api/catalog/items/skill/999")
         assert missing.status_code == 404
+
+
+def test_unique_effect_hidden_before_unlock(settings: Settings, tmp_path: Path) -> None:
+    """固有加成按解锁等级换算出「第几突起才用得上」；练不到时明确说练不到。"""
+    mdb = tmp_path / "master.mdb"
+    _build_mdb(mdb)
+
+    db = Database(settings.db_path)
+    try:
+        import_master_mdb(db, mdb, game_version="1.15.5")
+        db.execute("UPDATE catalog_support_unique SET need_lv = 40 WHERE support_card_id = 30001")
+        item = CatalogService(db).get("support_card", 30001)
+        # R 卡上限 20/25/30/35/40，need_lv 50 超出最高档
+        db.execute("UPDATE catalog_support_unique SET need_lv = 50 WHERE support_card_id = 30001")
+        db.execute("UPDATE catalog_support_cards SET rarity = 1 WHERE support_card_id = 30001")
+        unreachable = CatalogService(db).get("support_card", 30001)
+    finally:
+        db.close()
+
+    assert item is not None
+    # SSR 上限 30/35/40/45/50：40 级解锁 → 第 2 突起才够
+    assert item["unique"]["unlock_breakthrough"] == 2
+    assert unreachable is not None
+    assert unreachable["unique"]["unlock_breakthrough"] is None
+    assert unreachable["breakthroughs"]["level_caps"] == [20, 25, 30, 35, 40]
+
+
+def test_level_caps_fall_back_to_builtin(settings: Settings, tmp_path: Path) -> None:
+    """旧库没重新导入 support_card_limit 时用内置上限兜底，详情不能整块消失。"""
+    mdb = tmp_path / "master.mdb"
+    _build_mdb(mdb)
+
+    db = Database(settings.db_path)
+    try:
+        import_master_mdb(db, mdb, game_version="1.15.5")
+        db.execute("DELETE FROM catalog_support_limits")
+        item = CatalogService(db).get("support_card", 30001)
+    finally:
+        db.close()
+
+    assert item is not None
+    assert item["breakthroughs"]["level_caps"] == [30, 35, 40, 45, 50]
+    assert item["breakthroughs"]["rows"], "兜底上限下仍要算出各档数值"
 
 
 def test_reimport_replaces_snapshot(settings: Settings, tmp_path: Path) -> None:

@@ -77,7 +77,7 @@ export default {
       <section class="card">
         <h2>数据来源</h2>
         <div class="toolbar">
-          <button class="primary" id="skills-refresh">刷新技能数据</button>
+          <button class="ghost" id="skills-refresh">刷新技能数据</button>
           <span class="hint" id="skills-refresh-hint"></span>
         </div>
         <dl class="kv" id="skills-source"></dl>
@@ -91,7 +91,7 @@ export default {
           <label>分类 <select id="skills-category"><option value="">全部</option></select></label>
           <label>稀有度 <select id="skills-rarity"><option value="">全部</option></select></label>
           <label><input id="skills-source-only" type="checkbox" /> 只看能查到来源</label>
-          <button id="skills-search">查询</button>
+          <button class="primary" id="skills-search">查询</button>
         </div>
         <div class="hint" id="skills-list-hint"></div>
         <div class="list grid" id="skills-list"></div>

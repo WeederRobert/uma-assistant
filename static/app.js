@@ -94,9 +94,10 @@ function renderVersionBadge() {
 function renderSidebar() {
   const items = [
     { id: "overview", label: "概览", status: "ok" },
-    // 只把带面板的模块放侧栏：没有 [ui] 的模块（如只提供接口的 gacha）在概览里列状态即可
+    // 只把带面板且没标 hidden 的模块放侧栏：没有 [ui] 的（如 gacha）只提供接口，
+    // hidden 的（如数据同步）面板内嵌在概览页
     ...state.modules
-      .filter((module) => module.ui?.panel)
+      .filter((module) => module.ui?.panel && !module.ui?.hidden)
       .map((m) => ({
         id: m.id,
         label: m.ui?.label || m.name,
@@ -135,11 +136,8 @@ function renderOnboarding(info) {
   if (!setup || !setup.first_run) return "";
   const dataDir = info.paths?.data || "";
   const mdbPath = info.paths?.mdb || "";
-  const importAction = setup.can_import_via_ui
-    ? `<a class="more-btn" href="#/sync">打开「数据同步」</a>`
-    : "";
   const importHint = setup.can_import_via_ui
-    ? `用模拟器或已连接的手机：在「数据同步」点「检查客户端」，再导入这一版；手上只有一个文件：在同一页直接选 <span class="mono">master.mdb</span> 上传。`
+    ? `用模拟器或已连接的手机：在下面「数据版本」卡里点「检查客户端」，再导入这一版；手上只有一个文件：在同一处直接选 <span class="mono">master.mdb</span> 上传。`
     : `「数据同步」模块当前不可用，请把 <span class="mono">master.mdb</span> 放到 <span class="mono">${escapeHtml(mdbPath)}</span> 后重启。`;
   const cliHint = info.app.frozen
     ? ""
@@ -160,7 +158,6 @@ function renderOnboarding(info) {
           <p class="hint">${importHint}</p>
           <p class="hint">导入后的数据库、日志与快照都在 <span class="mono">${escapeHtml(dataDir)}</span>。</p>
           ${cliHint}
-          ${importAction}
         </li>
         <li>
           <div class="step-title">配置知识库问答 <span class="pill muted">可选</span></div>
@@ -175,12 +172,38 @@ function renderOnboarding(info) {
     </section>`;
 }
 
-function renderOverview() {
+function versionRows(data) {
+  const datasets = Object.entries(data.datasets || {});
+  // 版本号要一直看得见；逐表条数属于内部细节，折起来
+  const datasetBlock = datasets.length
+    ? `<details style="margin-top:10px">
+        <summary>数据集条数（${datasets.length} 项）</summary>
+        <dl class="kv" style="margin-top:8px">
+          ${datasets
+            .map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`)
+            .join("")}
+        </dl>
+      </details>`
+    : "";
+  return `
+    <dl class="kv">
+      <dt>版本</dt><dd>${escapeHtml(data.version)}</dd>
+      <dt>游戏版本</dt><dd>${escapeHtml(data.game_version || "未记录")}</dd>
+      <dt>更新于</dt><dd>${escapeHtml(data.updated_at || "未记录")}</dd>
+      <dt>来源</dt><dd>${escapeHtml(data.source || "未记录")}</dd>
+    </dl>
+    ${datasetBlock}`;
+}
+
+// 导入数据后只刷新这张卡的内容，避免整页重绘把面板状态（检查结果、历史展开）冲掉
+function patchOverviewVersion() {
+  const container = document.getElementById("overview-version");
+  if (container && state.info?.data) container.innerHTML = versionRows(state.info.data);
+}
+
+async function renderOverview() {
   const info = state.info;
   const data = info.data;
-  const datasets = Object.entries(data.datasets || {})
-    .map(([key, value]) => `<dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd>`)
-    .join("");
   view.innerHTML = `
     <h1 class="page-title">概览</h1>
     <p class="page-desc">所有事实性结论都应能追溯到下面的数据版本；导入或更新数据后，版本号会随之变化。</p>
@@ -188,18 +211,13 @@ function renderOverview() {
     <div class="grid two">
       <section class="card">
         <h2>数据版本</h2>
-        <dl class="kv">
-          <dt>版本</dt><dd>${escapeHtml(data.version)}</dd>
-          <dt>游戏版本</dt><dd>${escapeHtml(data.game_version || "未记录")}</dd>
-          <dt>更新于</dt><dd>${escapeHtml(data.updated_at || "未记录")}</dd>
-          <dt>来源</dt><dd>${escapeHtml(data.source || "未记录")}</dd>
-          ${datasets}
-        </dl>
+        <div id="overview-version">${versionRows(data)}</div>
         ${
           data.known
             ? ""
-            : `<p class="hint">还没有结构化数据，按上方「从这里开始」的第一步导入即可。</p>`
+            : `<p class="hint">还没有结构化数据，用下面的入口导入一次即可。</p>`
         }
+        <div id="overview-sync" style="margin-top:18px"></div>
       </section>
       <section class="card">
         <h2>运行环境</h2>
@@ -227,6 +245,21 @@ function renderOverview() {
       </section>
     </div>
   `;
+
+  // 数据同步的面板内嵌在这张「数据版本」卡里（manifest 里标了 hidden，不进侧栏）
+  const syncHost = document.getElementById("overview-sync");
+  const meta = state.modules.find((m) => m.id === "sync");
+  if (syncHost && meta?.status === "ok" && meta.ui?.panel) {
+    try {
+      const panel = await loadPanel(meta);
+      const result = await panel.mount(syncHost, panelContext({ embedded: true }));
+      if (typeof result === "function") state.cleanups.push(result);
+    } catch (error) {
+      syncHost.innerHTML = `<p class="hint">数据同步面板加载失败：${escapeHtml(
+        error.message,
+      )}</p>`;
+    }
+  }
 }
 
 async function refreshInfo() {
@@ -234,7 +267,34 @@ async function refreshInfo() {
   state.modules = state.info.modules;
   document.getElementById("app-version").textContent = `v${state.info.app.version}`;
   renderVersionBadge();
+  // 在概览页导入完数据后，这张卡的版本号与条数要立刻跟着变
+  patchOverviewVersion();
   return state.info;
+}
+
+async function loadPanel(meta) {
+  if (!state.panels.has(meta.id)) {
+    // 带版本参数，应用升级后不会复用浏览器缓存的旧面板
+    const version = `${state.info?.app?.version ?? "dev"}-${meta.version}`;
+    const imported = await import(`${meta.ui.panel}?v=${encodeURIComponent(version)}`);
+    state.panels.set(meta.id, imported.default);
+  }
+  return state.panels.get(meta.id);
+}
+
+function panelContext(extra = {}) {
+  return {
+    api,
+    escapeHtml,
+    toast,
+    createLimiter,
+    state,
+    // hash 里的查询参数，例如 #/skills?skill=200462 的 {skill: "200462"}
+    params: state.params || new URLSearchParams(),
+    // 模块改了数据后（例如导入了新版本）用它刷新侧栏徽标与模块列表
+    refreshInfo,
+    ...extra,
+  };
 }
 
 async function renderModule(moduleId) {
@@ -252,27 +312,11 @@ async function renderModule(moduleId) {
     return;
   }
 
-  if (!state.panels.has(meta.id)) {
-    // 带版本参数，应用升级后不会复用浏览器缓存的旧面板
-    const version = `${state.info?.app?.version ?? "dev"}-${meta.version}`;
-    const imported = await import(`${meta.ui.panel}?v=${encodeURIComponent(version)}`);
-    state.panels.set(meta.id, imported.default);
-  }
-  const panel = state.panels.get(meta.id);
+  const panel = await loadPanel(meta);
   view.innerHTML = "";
   const root = document.createElement("div");
   view.appendChild(root);
-  const result = await panel.mount(root, {
-    api,
-    escapeHtml,
-    toast,
-    createLimiter,
-    state,
-    // hash 里的查询参数，例如 #/skills?skill=200462 的 {skill: "200462"}
-    params: state.params || new URLSearchParams(),
-    // 模块改了数据后（例如导入了新版本）用它刷新侧栏徽标与模块列表
-    refreshInfo,
-  });
+  const result = await panel.mount(root, panelContext());
   if (typeof result === "function") {
     state.cleanups.push(result);
   }
@@ -288,7 +332,7 @@ async function route() {
   renderSidebar();
   try {
     if (requested === "overview") {
-      renderOverview();
+      await renderOverview();
     } else {
       await renderModule(requested);
     }

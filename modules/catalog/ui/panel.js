@@ -55,41 +55,76 @@ function skillList(escapeHtml, rows) {
     .join("")}</div>`;
 }
 
-function effectTable(escapeHtml, rows) {
-  if (!rows || !rows.length) return `<div class="empty">这张卡没有训练效果数据</div>`;
+const PLUS = (value) => (value === null || value === undefined ? "—" : `+${value}`);
+
+// 每列 = 「突破到该档并升到该档等级上限」时的数值；与上一档不同时加粗，方便扫出变化点
+function breakthroughTable(escapeHtml, breakthroughs) {
+  if (!breakthroughs || !(breakthroughs.level_caps || []).length) {
+    return `<p class="hint" style="margin:0">缺少这张卡的等级上限数据（support_card_limit），无法按突破换算；请重新导入 master.mdb。</p>`;
+  }
+  const caps = breakthroughs.level_caps;
+  const rows = breakthroughs.rows || [];
+  if (!rows.length) return `<div class="empty">这张卡没有训练效果数据</div>`;
+
+  const head = caps
+    .map(
+      (cap, index) =>
+        `<th>${index}突<br /><span class="hint">上限 ${escapeHtml(cap)} 级</span></th>`,
+    )
+    .join("");
+
   const body = rows
     .map((row) => {
-      const levels = Object.entries(row.levels || {})
-        .map(([level, value]) => `${level}: +${value}`)
-        .join(" · ");
-      const plus = (value) =>
-        value === null || value === undefined ? "—" : `+${value}`;
-      return `<tr>
-        <td>${escapeHtml(row.label)}</td>
-        <td class="mono">${row.effect_type}</td>
-        <td class="mono">${plus(row.init)}</td>
-        <td class="mono">${escapeHtml(levels || "—")}</td>
-        <td class="mono">${plus(row.max)}</td>
-        <td class="mono">${plus(row.gain)}</td>
-      </tr>`;
+      const values = row.values || [];
+      const cells = caps
+        .map((_cap, index) => {
+          const value = values[index];
+          const changed = index > 0 && value !== values[index - 1];
+          return `<td class="mono">${changed ? `<strong>${PLUS(value)}</strong>` : PLUS(value)}</td>`;
+        })
+        .join("");
+      return `<tr><td>${escapeHtml(row.label)}</td>${cells}</tr>`;
     })
     .join("");
+
   return `<table class="seg-table">
-    <thead><tr><th>效果</th><th>类型</th><th>初始</th><th>各突破等级</th><th>满破</th><th>净增</th></tr></thead>
+    <thead><tr><th>效果</th>${head}</tr></thead>
     <tbody>${body}</tbody>
   </table>`;
 }
 
-function uniqueList(escapeHtml, rows) {
-  if (!rows || !rows.length) return "";
-  return `<ul class="hint" style="margin:0">${rows
-    .map(
-      (row) =>
-        `<li>${escapeHtml(row.label)} ${escapeHtml(String(row.value ?? "—"))}${
-          row.need_lv ? `（${row.need_lv} 级解锁）` : ""
-        }<span class="mono"> · 类型 ${escapeHtml(String(row.effect_type))}</span></li>`,
-    )
-    .join("")}</ul>`;
+// 解锁条件：主数据给的是「解锁等级」，换算成「第几突起」更贴近用户问的「什么时候用得上」
+function unlockText(unique) {
+  if (!unique || !unique.need_lv) return "无解锁等级，初始即可用";
+  const cap = unique.unlock_breakthrough;
+  return cap === null || cap === undefined
+    ? `等级 ${unique.need_lv}（该稀有度练不到这个等级）`
+    : `等级 ${unique.need_lv} · 第 ${cap} 突起可达到`;
+}
+
+function uniqueBlock(escapeHtml, unique) {
+  if (!unique) return `<p class="hint" style="margin:0">这张卡没有固有加成数据。</p>`;
+  // 条件型加成（101–120）的数值是条件参数，含义随类型变化，只用官方成句文案说明
+  const parts = [];
+  if (unique.text) {
+    parts.push(`<div class="detail-desc" style="margin:0 0 6px">${escapeHtml(unique.text)}</div>`);
+  }
+  const items = unique.items || [];
+  if (items.length) {
+    parts.push(
+      `<div class="hint" style="margin:0">${items
+        .map((row) => `${escapeHtml(row.label)} ${escapeHtml(PLUS(row.value))}`)
+        .join(" · ")}</div>`,
+    );
+  }
+  if (unique.conditional) {
+    parts.push(
+      `<div class="hint" style="margin:6px 0 0">条件型加成：主数据只给出条件与效果名，没有可换算的数值。</div>`,
+    );
+  }
+  return `${parts.join("")}<div class="hint" style="margin:6px 0 0">解锁条件：${escapeHtml(
+    unlockText(unique),
+  )}</div>`;
 }
 
 export default {
@@ -193,16 +228,15 @@ export default {
         }
         if (item.kind === "support_card") {
           sections.push(
-            `<h3 style="margin-top:16px">训练效果（${(item.effects || []).length}）</h3>`,
-            effectTable(escapeHtml, item.effects),
-            item.effect_source
-              ? `<p class="hint">效果名称取自 ${escapeHtml(
-                  item.effect_source,
-                )}；主数据里没有这张字典，未收录的类型只显示编号。突破等级值为「该档达到的值」，-1 表示该档不提升；「净增」是满破值减去初始值。</p>`
-              : "",
+            `<h3 style="margin-top:16px">突破效果</h3>`,
+            breakthroughTable(escapeHtml, item.breakthroughs),
+            `<p class="hint">每列是「突破到该档并升到该档等级上限」时的数值，— 表示此时还没有这一项；加粗的是从上一档起有变化的数值。${
+              item.effect_source
+                ? `效果名称取自 ${escapeHtml(item.effect_source)}；字典里没有的类型只显示编号。`
+                : ""
+            }</p>`,
             `<h3 style="margin-top:16px">固有加成</h3>`,
-            uniqueList(escapeHtml, item.unique_effects) ||
-              `<p class="hint" style="margin:0">这张卡没有固有加成数据。</p>`,
+            uniqueBlock(escapeHtml, item.unique),
             `<h3 style="margin-top:16px">提示技能（${(item.skills || []).length}）</h3>`,
             skillList(escapeHtml, item.skills),
           );

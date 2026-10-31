@@ -6,7 +6,7 @@
 - 原则：事实查库、建议交给 LLM；每条结论都能追溯到一个**数据版本**
 - 许可：Apache-2.0
 
-> 当前状态：**v1.0.0**，可打包分发。内核、模块系统、数据版本、图鉴模块（master.mdb 导入 + 查询，含马娘技能组与协助卡各突破等级数值）、知识库模块（RAG + DeepSeek）、数据同步（客户端提取 / 上传）、日程（BWiki 简中服卡池 + mdb 卡池预告 + 大赛排期，汇总一页）、赛道（赛事目录 + 赛道几何 + 场地状态出现率）、技能（条件 / 效果参数 / 来源反查 / 进化关系）、相性（两人关系组点数 + 六人继承布局）已打通；内置 [机制知识库素材](docs/kb/README.md) 让助手在没有 `master.mdb` 时也能回答机制问题。首次启动且没有数据时，概览页会给出「导入数据 → 配置问答 → 开始查询」三步引导。
+> 当前状态：**v1.0.0**，可打包分发。内核、模块系统、数据版本、图鉴模块（master.mdb 导入 + 查询，含马娘技能组与协助卡突破表）、知识库模块（RAG + DeepSeek）、数据同步（客户端提取 / 上传）、日程（BWiki 简中服卡池 + mdb 卡池预告 + 大赛排期，汇总一页）、赛道（赛事目录 + 赛道几何 + 场地状态出现率）、技能（条件 / 效果参数 / 来源反查 / 进化关系）、相性（两人关系组点数 + 六人继承布局）已打通；内置 [机制知识库素材](docs/kb/README.md) 让助手在没有 `master.mdb` 时也能回答机制问题。首次启动且没有数据时，概览页会给出「导入数据 → 配置问答 → 开始查询」三步引导。
 
 ## 快速开始
 
@@ -43,6 +43,12 @@
 - 数据与日志落在 `%LOCALAPPDATA%\uma-assistant\data\`，`.env` 放在 exe 同级目录
 - 想自己出包：`uv run pyinstaller packaging/uma-assistant.spec --noconfirm`；完整版加环境变量 `UMA_BUNDLE_ML=1`（体积约 1 GB，带文档 RAG）。细节见 [docs/packaging.md](docs/packaging.md)
 
+图标（exe / 任务栏 / 浏览器标签页）由 `packaging/Logo.png` 生成，改图后跑一次：
+
+```powershell
+.\packaging\make-icon.ps1
+```
+
 ### 手动启动
 
 ```powershell
@@ -60,7 +66,7 @@ uv run python scripts/import_master_mdb.py "D:\path\to\master.mdb" --game-versio
 
 `master.mdb` 是游戏本体的数据表，需从**你自己已安装的客户端**目录中取得（项目不提供、不下载、不再分发该文件）。导入结果会打印条目计数，`skipped` 与 `missing_columns` 为空即表示字段映射完整；每次导入会在 `data/snapshots/<版本>.json` 留一条记录，同一份文件重复导入会按 sha256 直接跳过（要强制重导加 `--force`）。
 
-也可以完全不开终端：启动后在侧栏「数据同步」里点「检查客户端」→「导入这一版」，或直接选一个 `master.mdb` 上传。命令行与界面走的是同一条链路（`modules/sync`），`scripts/*.py` 只是薄封装。
+也可以完全不开终端：启动后在概览页的「数据版本」卡里点「检查客户端」→「导入这一版」，或直接选一个 `master.mdb` 上传。命令行与界面走的是同一条链路（`modules/sync`），`scripts/*.py` 只是薄封装。
 
 用的是模拟器（MuMu / 夜神等）时不必手工翻目录，直接从设备取当期数据：
 
@@ -140,7 +146,7 @@ uma-assistant/
 │  ├─ import_master_mdb.py  # 导入 mdb（薄封装，逻辑在 modules/sync）
 │  ├─ fetch_mdb_android.py  # 从模拟器/真机提取当期 master.mdb（同上）
 │  └─ import_kb.py
-├─ packaging/            # PyInstaller 打包：spec、入口脚本与打包产物冒烟测试
+├─ packaging/            # PyInstaller 打包：spec、入口脚本、图标生成与打包产物冒烟测试
 ├─ data/                 # 运行时生成：app.db / mdb / snapshots / .tmp / logs（都在工作区内）
 ├─ tests/                # pytest
 └─ docs/                 # 调研、架构、模块约定、数据同步设计、知识库素材
@@ -157,11 +163,11 @@ uma-assistant/
 | 模块化 | 目录即模块，`manifest.toml` + `module.py: setup(ctx)`；单模块加载失败被隔离，不影响其它模块 | [docs/modules.md](docs/modules.md) |
 | 架构分层 | 内核（装配/存储/版本）与模块（业务）分离，模块之间不互相 import | [docs/architecture.md](docs/architecture.md) |
 | 数据版本 | `meta` 表存 `data.version`，侧栏徽标、`/api/system/info`、LLM 提示词都会带上 | [docs/architecture.md](docs/architecture.md) |
-| 数据同步 | 客户端提取 / 文件上传 / sha256 幂等 / 每次导入写 `data/snapshots/<版本>.json` | [docs/data-sync.md](docs/data-sync.md) |
+| 数据同步 | 客户端提取 / 文件上传 / sha256 幂等 / 每次导入写 `data/snapshots/<版本>.json`；面板内嵌在概览页的「数据版本」卡里，不进侧栏 | [docs/data-sync.md](docs/data-sync.md) |
 | 日程（简中服卡池 / 卡池与大赛排期） | BWiki SMW 只抓简中服两个卡池分类（服务器由分类决定），带来源等级与抓取时间；6h 缓存 + 强制刷新。卡池预告与大赛排期取 `master.mdb`，同页展示 | [docs/events.md](docs/events.md) |
 | 赛道 / 大赛 / 场地状态 | 赛事目录、大赛排期与场地状态出现率取 `master.mdb`（A 级），赛道几何取 BWiki 数据页（C 级）；几何统计口径、出现率口径与源数据缺陷单独说明 | [docs/races.md](docs/races.md) |
 | 技能 | 条件表达式、效果参数、马娘与协助卡反查、进化关系全部来自 `master.mdb`；没有字典表的枚举只回显原始编号，`skill_set` 这条退化的反查链路明确弃用 | [docs/skills.md](docs/skills.md) |
-| 图鉴详情 | `master.mdb` 的 `available_skill_set`（马娘技能组 + 解锁星级）、`support_card_effect_table`（各突破等级数值）、`support_card_unique_effect`（固有加成）、`single_mode_hint_gain`（提示技能）；效果名称取自 BWiki revid 35946 | [docs/catalog.md](docs/catalog.md) |
+| 图鉴详情 | `master.mdb` 的 `available_skill_set`（马娘技能组 + 解锁星级）、`support_card_limit`（各稀有度 0–4 突的等级上限）、`text_data` 151/154（效果类型名称与说明）、`support_card_effect_table`（各等级数值，折算成突破表）、`support_card_unique_effect` + `text_data` 155（固有加成与发动条件）、`single_mode_hint_gain`（提示技能） | [docs/catalog.md](docs/catalog.md) |
 | 相性 | `master.mdb` 的 `succession_relation` / `_member` / `_rank`（2133 组 / 4527 成员 / 3 档），两人点数与六人布局分数；明确不含适性（主数据无适性表） | [docs/succession.md](docs/succession.md) |
 | 卡池预告 | `master.mdb` 的 `gacha_data`／`text_data`／`gacha_available` 给出卡池排期与精选，含尚未开放的未来卡池（当期快照排到 2027-01-18），已用 BWiki 当期卡池交叉验证；面板并入「日程」页 | [docs/gacha.md](docs/gacha.md) |
 | 日志 | 控制台 + `data/logs/app.log`，`RotatingFileHandler` 1 MB × 3 份；uvicorn 也走同一份配置 | — |
@@ -176,7 +182,7 @@ uma-assistant/
 
 | 模块 | 作用 | API 前缀 |
 | --- | --- | --- |
-| `catalog` | 马娘 / 协助卡 / 技能的结构化查询，数据来自本地 `master.mdb`；详情带马娘的技能组（含解锁星级）、协助卡的训练效果数值 / 固有加成 / 提示技能 | `/api/catalog` |
+| `catalog` | 马娘 / 协助卡 / 技能的结构化查询，数据来自本地 `master.mdb`；详情带马娘的技能组（含解锁星级）、协助卡的**突破表**（0–4 突 × 练到该档上限后的数值）与**固有效果**（官方文案含条件型加成的发动条件、解锁档位）/ 提示技能 | `/api/catalog` |
 | `knowledge` | 导入 Markdown/PDF/TXT 建立向量库；回答时**先用本地模块接口查结构化数据**（赛道 / 大赛 / 技能 / 卡池 / 图鉴），命中就以查库结果为准并标注来源接口与数据版本，没命中才回落文档检索 | `/api/knowledge` |
 | `sync` | 从本机客户端或选定的 `master.mdb` 更新数据，按 sha256 幂等，并记录版本快照 | `/api/sync` |
 | `events` | 从 BWiki 抓取**简中服**卡池（只看简中，不跟踪繁中 / 日服），看日程与变更审计；**日程总页**同时展示 `gacha` 的卡池排期与 `races` 的大赛排期 | `/api/events` |

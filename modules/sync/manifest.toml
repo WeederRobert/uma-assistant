@@ -2,7 +2,7 @@
 id = "sync"
 name = "数据同步"
 version = "0.1.0"
-description = "从本机游戏客户端或手动选择的 master.mdb 更新结构化数据，并记录每次导入的版本快照"
+description = "从本机游戏客户端或手动选择的 master.mdb 更新结构化数据，并记录每次导入的版本快照；面板并入「概览」的数据版本卡，不进侧栏"
 order = 30
 requires = ["catalog"]
 
@@ -12,3 +12,5 @@ prefix = "/api/sync"
 [ui]
 label = "数据同步"
 panel = "panel.js"
+# 面板内嵌在概览页的「数据版本」卡里，不进侧栏
+hidden = true

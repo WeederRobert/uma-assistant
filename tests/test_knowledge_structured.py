@@ -235,8 +235,17 @@ def test_catalog_fact_reports_breakthrough_values() -> None:
                 "name": "富士奇石",
                 "title": "[哎呀呀，欢迎回来]",
                 "attributes": [{"label": "稀有度", "value": "SR"}],
-                "effects": [{"label": "友情加成", "init": 10, "max": 20, "gain": 10}],
-                "unique_effects": [{"label": "技能Pt加成", "value": 1, "need_lv": 25}],
+                "breakthroughs": {
+                    "level_caps": [25, 30, 35, 40, 45],
+                    "rows": [{"label": "友情加成", "values": [10, 10, 10, 20, 20]}],
+                },
+                "unique": {
+                    "text": None,
+                    "conditional": False,
+                    "need_lv": 25,
+                    "unlock_breakthrough": 0,
+                    "items": [{"label": "技能点数加成", "value": 1}],
+                },
                 "skills": [{"name": "夏季优俊少女○"}],
             },
         }
@@ -245,7 +254,8 @@ def test_catalog_fact_reports_breakthrough_values() -> None:
     result = lookup.lookup("富士奇石这张协助卡的属性加成有多少")
 
     lines = result.facts[0].lines
-    assert any("净增 10" in line for line in lines)
+    assert any("0 突（25 级）+10" in line for line in lines)
+    assert any("4 突（45 级）+20" in line for line in lines)
     assert any("（25 级解锁）" in line for line in lines)
     assert any("提示技能（1）" in line for line in lines)
 

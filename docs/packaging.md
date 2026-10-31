@@ -66,7 +66,28 @@ $env:UMA_CONSOLE='1';   uv run pyinstaller packaging/uma-assistant.spec --noconf
 CI 的 `package` 任务（[`.github/workflows/ci.yml`](../.github/workflows/ci.yml)）在 `windows-latest` 上
 跑同一套命令，并把 `uma-assistant-windows.zip` 作为 artifact 上传（保留 14 天）。
 
-## 5. 运行时文件落点（P4-2b 定稿）
+## 5. 图标
+
+图标只有一份源图 `packaging/Logo.png`，其余都是生成物：
+
+```powershell
+.\packaging\make-icon.ps1        # 改了 Logo.png 之后跑一次
+```
+
+| 产物 | 用途 | 规格 |
+| --- | --- | --- |
+| `packaging/icon.ico` | spec 里 `EXE(icon=…)` → exe 图标（资源管理器 / 开始菜单 / 任务栏 / 窗口标题栏都跟着它） | 7 帧：16/24/32/48/64/128 用 32bpp BMP 帧，256 用 PNG 帧 |
+| `static/favicon.ico` | 浏览器标签页（`index.html` 的 `rel="icon"`） | 3 帧：16/32/48 BMP |
+| `static/icon.png` | 侧栏品牌图（`.brand-mark`，34px 圆角裁切）与 `apple-touch-icon` | 256×256 PNG |
+
+两点说明：
+
+- **生成脚本用 `System.Drawing` 而不是 Pillow**：`pillow` 虽在 `pyproject.toml` 的 dev 组里，但 `uv.lock` 没有收录，`uv run` 会因此重新解析依赖；图标生成不该被这件事卡住。脚本是纯 GDI+，无第三方依赖。
+- **源码模式跑出来的窗口图标仍然是 Python 的**：pywebview 没有暴露设置窗口图标的接口，任务栏图标取自 exe。要看到成品图标就用打包产物（`dist/uma-assistant/uma-assistant.exe`），或在浏览器里看 `favicon.ico` 与侧栏品牌图。
+
+验证：`.\packaging\smoke.ps1 -Exe .\dist\uma-assistant\uma-assistant.exe` 跑通后，用 `[System.Drawing.Icon]::ExtractAssociatedIcon($exe)` 取出的图标应与 `Logo.png` 一致（实测 32×32 提取正常，exe 里能找到 256 帧的 PNG 签名）。
+
+## 6. 运行时文件落点（P4-2b 定稿）
 
 | 内容 | 源码运行 | 打包运行 | 原因 |
 | --- | --- | --- | --- |
@@ -79,7 +100,7 @@ CI 的 `package` 任务（[`.github/workflows/ci.yml`](../.github/workflows/ci.y
 `app_root()` / `default_data_dir()`，业务代码继续只用 `Settings.data_dir` 与 `Settings.tmp_dir`，
 另有 `tests/test_config.py` 覆盖两种形态（含 `%LOCALAPPDATA%` 缺失时回退到 `~/AppData/Local`）。
 
-## 6. 已知限制
+## 7. 已知限制
 
 - **未签名**：首次运行会被 SmartScreen 拦一下，需要「更多信息 → 仍要运行」。
 - **依赖 WebView2 Runtime**：Windows 10/11 一般自带；缺失时窗口起不来（可用 `--no-window` 后用浏览器打开）。

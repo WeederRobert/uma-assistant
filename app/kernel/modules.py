@@ -32,6 +32,7 @@ class ModuleManifest:
     api_prefix: str | None = None
     ui_panel: str | None = None
     ui_label: str | None = None
+    ui_hidden: bool = False
     path: Path = field(default=Path("."), compare=False, repr=False)
 
     @classmethod
@@ -60,6 +61,7 @@ class ModuleManifest:
             api_prefix=api.get("prefix") or f"/api/{module_id}",
             ui_panel=ui.get("panel"),
             ui_label=ui.get("label"),
+            ui_hidden=bool(ui.get("hidden", False)),
             path=path.parent,
         )
 
@@ -235,6 +237,8 @@ class ModuleRegistry:
                 entry["ui"] = {
                     "label": manifest.ui_label or manifest.name,
                     "panel": f"/module-assets/{manifest.id}/{manifest.ui_panel}",
+                    # hidden = 不进侧栏（面板被别的页面内嵌，如概览里的「数据同步」）
+                    "hidden": manifest.ui_hidden,
                 }
             if loaded.ok and loaded.module is not None and loaded.module.status is not None:
                 try:

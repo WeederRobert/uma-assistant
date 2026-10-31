@@ -136,6 +136,7 @@ sequenceDiagram
 | 长文本 | 描述类文本加 `class="meta clamp"`（两行截断），完整内容进详情或 `title` |
 | 长明细折叠 | 来源清单这类次要信息放进 `<details>`，默认收起，`summary` 写「展开来源明细（2 条 …）」 |
 | 不换行的角标 | 状态 pill、编号、时间加 `nowrap`；网格内的 nowrap 会自动放开，避免撑出横向滚动条 |
+| 按钮只有三档 | ①默认（描边次要动作：刷新 / 重置 / 清空 / 关闭 / 删除）；②`class="primary"`（主操作：查询 / 计算 / 导入 / 提问 / 检查，一屏里每张卡最多一个）；③胶囊形轻量操作（`.more-btn` 展开更多、`.chip` 切换、`button.tag` 卡池 `+N`）。**不要再写裸 `<button>` 以外的样式** —— `styles.css` 的 `button` 基础规则保证新按钮自动统一（8px 圆角 / 8×16 内边距 / 13px / 一致的 hover 与 disabled） |
 
 校验方式：`document.querySelector(".main-scroll").scrollWidth === clientWidth`（不应出现横向滚动条）。
 

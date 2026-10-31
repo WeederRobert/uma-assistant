@@ -9,6 +9,7 @@
 """
 
 import os
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
@@ -18,6 +19,10 @@ BUNDLE_ML = os.environ.get("UMA_BUNDLE_ML") == "1"
 ONEFILE = os.environ.get("UMA_ONEFILE") == "1"
 # 排查打包问题时设 UMA_CONSOLE=1，保留控制台以便看到启动期异常
 CONSOLE = os.environ.get("UMA_CONSOLE") == "1"
+
+# 应用图标由 packaging/make-icon.ps1 从 packaging/Logo.png 生成（exe 图标 + favicon + 侧栏品牌图）
+ICON = ROOT / "packaging" / "icon.ico"
+icon_path = str(ICON) if ICON.is_file() and sys.platform == "win32" else None
 
 # 模块只在运行期按目录发现，PyInstaller 静态分析看不到，数据和 py 模块都要显式列出来
 DATA_SUFFIXES = {".toml", ".js", ".css", ".html"}
@@ -106,6 +111,7 @@ exe = EXE(
     analysis.datas if ONEFILE else [],
     [],
     name="uma-assistant",
+    icon=icon_path,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

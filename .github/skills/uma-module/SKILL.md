@@ -12,7 +12,7 @@ argument-hint: "要新增或改造的模块，例如：新增 succession 相性�
 
 | 文件 | 职责 | 关键点 |
 | --- | --- | --- |
-| `manifest.toml` | 声明 id / name / order / requires / api 前缀 / ui | `requires` 只影响加载顺序；**不写 `[ui]` 就是只提供接口**（如 `gacha`） |
+| `manifest.toml` | 声明 id / name / order / requires / api 前缀 / ui | `requires` 只影响加载顺序；**不写 `[ui]` 就是只提供接口**（如 `gacha`）；写了 `[ui]` 但加 `hidden = true` 则**有面板、不进侧栏**（被别的页面内嵌，如概览里的 `sync`） |
 | `module.py` | `setup(ctx) -> Module(router=..., status=..., on_shutdown=...)` | 启动时做一次 `ensure_*()` 补导入；`status` 给侧栏与 `/api/system/info` |
 | `schema.py` | `SCHEMA` + `ensure_schema(db)` | 表名 `<id>_*`；老库加列要写 `PRAGMA table_info` + `ALTER TABLE` 迁移（参考 `modules/races/schema.py`） |
 | `store.py` | 纯 SQL 读写 + `meta` 来源信息 | 写导入元信息：路径、sha256 前缀、`mdb_mtime`、导入时间、条数 |

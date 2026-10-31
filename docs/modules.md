@@ -34,6 +34,7 @@ prefix = "/api/catalog"   # 可选，默认 /api/<id>
 [ui]
 label = "图鉴"            # 侧栏文字，默认用 name
 panel = "panel.js"        # 相对于 ui/ 的入口文件
+# hidden = true           # 可选：面板不给侧栏入口（被别的页面内嵌，如概览里的「数据同步」）
 ```
 
 校验规则：`id` 非法或与目录名不一致、缺 `name`/`version` → 该模块被跳过并记 error 日志。`requires` 指向不存在的模块或形成环 → 启动直接失败（这是配置错误，不是运行时故障，早失败更好）。

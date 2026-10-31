@@ -57,12 +57,10 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 9px;
-  display: grid;
-  place-items: center;
+  display: block;
+  /* 图标本身是白底方图，圆角裁一下才不像一张贴纸 */
+  object-fit: cover;
   background: var(--accent);
-  color: #1a1204;
-  font-weight: 700;
-  font-size: 18px;
 }
 
 .brand-name {
@@ -243,6 +241,9 @@ body {
   background: var(--bg-soft);
   color: var(--text-dim);
   font-size: 12px;
+  /* 角标在 flex 行里会被压缩成竖排（如「正/常」），一律不换行 */
+  white-space: nowrap;
+  flex: none;
 }
 
 .pill.ok {
@@ -329,6 +330,17 @@ body {
   font-size: 11px;
   line-height: 18px;
   white-space: nowrap;
+}
+
+/* 可点击的标签（例如卡池精选里的「+42 / 收起」）：沿用 .tag 外观，只补按钮默认样式 */
+button.tag {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button.tag:hover {
+  color: var(--text);
+  border-color: #3b4757;
 }
 
 .tag.server-cn {
@@ -418,35 +430,53 @@ body {
   margin-bottom: 16px;
 }
 
-button.primary,
-button.ghost {
+/* 按钮只有三档：
+   1. 默认（= 描边次要动作，如刷新 / 重置 / 关闭 / 删除）；
+   2. .primary（主操作，如查询 / 计算 / 导入 / 提问）；
+   3. .more-btn / .chip / button.tag（列表里的轻量操作，胶囊形）。
+   .ghost 与默认外观一致，保留在 markup 里只为语义清晰；不要再写裸 <button> 以外的样式。 */
+button {
   border-radius: 8px;
   padding: 8px 16px;
+  font-family: inherit;
   font-size: 13px;
+  line-height: 1.2;
   cursor: pointer;
-  border: 1px solid transparent;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  transition:
+    color 0.12s,
+    border-color 0.12s,
+    filter 0.12s;
 }
 
-button.primary {
-  background: var(--accent);
-  color: #1a1204;
-  font-weight: 600;
+button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: #3b4757;
 }
 
-button.primary:disabled {
+button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-button.ghost {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--text-dim);
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-button.ghost:hover {
-  color: var(--text);
-  border-color: #3b4757;
+button.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #1a1204;
+  font-weight: 600;
+}
+
+button.primary:hover:not(:disabled) {
+  color: #1a1204;
+  border-color: transparent;
+  filter: brightness(1.08);
 }
 
 input[type="text"],
@@ -791,13 +821,19 @@ code,
   border: 0;
 }
 
+/* 选文件也是按钮的样子，跟旁边的「导入」并排时不显得是另一种控件 */
 .file-picker {
-  border: 1px dashed var(--border);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 16px;
   font-size: 13px;
+  /* 与 button 同样的行高，否则比旁边的「导入」高 5px */
+  line-height: 1.2;
   color: var(--text-dim);
   cursor: pointer;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
 }
 
 .file-picker:hover {

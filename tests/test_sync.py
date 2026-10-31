@@ -266,5 +266,7 @@ def test_sync_module_manifest_declares_catalog_dependency(settings: Settings) ->
 
     assert modules["sync"]["status"] == "ok"
     assert modules["sync"]["ui"]["panel"] == "/module-assets/sync/panel.js"
+    # 面板内嵌在概览的「数据版本」卡里，所以不进侧栏
+    assert modules["sync"]["ui"]["hidden"] is True
     assert modules["sync"]["api"] == "/api/sync"
     assert modules["sync"]["details"]["data_version"]["version"] == "unknown"

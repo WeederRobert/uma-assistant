@@ -22,10 +22,11 @@
 | 简中服官方术语表（从快照 `text_data` 提取） | `docs/kb/08-glossary.md` | 协助卡 / 耐力 / 领跑·跟前·居中·后追 / 群英联赛 / 解锁上限 / 干劲五档 / 赛事等级 | ✅ |
 | 图鉴模块：马娘 / 协助卡 / 技能检索 | `modules/catalog/service.py` | `tests/test_catalog.py` | ✅ |
 | 图鉴详情视图（可读属性 + 完整描述 + 数据版本） | `modules/catalog/ui/panel.js`、`modules/catalog/labels.py` | 浏览器实测点击 / Enter / Esc / 点遮罩；`tests/test_catalog.py` 断言属性与版本 | ✅ |
+| 协助卡突破表与固有加成（含发动条件） | `modules/catalog/service.py`、`modules/catalog/ui/panel.js` | `support_card_limit` 决定 R/SR/SSR 各档上限（20/25/30/35/40、25/30/35/40/45、30/35/40/45/50）；面板给「效果 × 0–4 突」五列，固有加成单独一块并用 `text_data` 155 的原文写出条件型加成（101–120）的发动条件；`tests/test_catalog.py` 断言档位换算、字典优先与解锁档 | ✅ |
 | 导入失败的可诊断性 | `modules/catalog/importer.py` | 缺文件 / 目录 / 非 SQLite / 缺 `text_data` 四类均有中文单测；CLI 退出码 `2` | ✅ |
 | 文件日志（`data/logs/app.log`，1 MB × 3 轮转） | `app/kernel/logging.py` | `tests/test_logging.py`；实际启动后日志含 uvicorn 与模块输出 | ✅ |
 | 知识库模块：文档上传 / 切块 / 向量检索 / 带引用回答 | `modules/knowledge/` | 上传 md → 检索命中 → 删除 | ✅ |
-| 数据同步模块：设备提取 / 上传 / 幂等 / 快照历史 | `modules/sync/` | `tests/test_sync.py`（13 例）；浏览器「数据同步」页实测「检查客户端」与上传 | ✅ |
+| 数据同步模块：设备提取 / 上传 / 幂等 / 快照历史 | `modules/sync/` | `tests/test_sync.py`（13 例）；面板内嵌在概览「数据版本」卡（`[ui] hidden = true`，不进侧栏），浏览器实测「检查客户端」与上传 | ✅ |
 | 内置机制知识库素材（11 篇，带来源 / 版本 / 可信级别） | `docs/kb/` | 导入 11 篇 → 165 个切块；新增 BWiki 来源（状态效果、赛事名称、相性算法、赛道几何）与「数据版本与更新流程」（kb README 3.4） | ✅ |
 | 活动 / 卡池 / 日程（BWiki SMW 抓取 + 差异审计 + 日程面板） | `modules/events/` | `tests/test_events.py`（25 例）；真实抓取 202 条简中服卡池；浏览器「日程」页实测 | ✅ |
 | **日程汇总页**（卡池排期 + 大赛排期 + BWiki 时间轴同页；大赛默认只看未结束） | `modules/events/ui/panel.js` | 浏览器实测：41 条未来卡池 / 22 条进行中 / 大赛 2 届（取消勾选 29 届） | ✅ 2026-10-27 |
@@ -202,6 +203,22 @@ flowchart LR
 > P3-4 落在图鉴详情里（`catalog`）：`support_card_effect_table` 的初始值 + `lv5..lv50` 各档 + 满破值 + **净增**，`support_card_unique_effect` 两个槽位（带 `need_lv` 解锁等级），`single_mode_hint_gain` 的提示技能；技能行可点，跳到 `#/skills?skill=<id>` 直接打开 P3-3 的技能详情（`static/app.js` 的 `route()` 现在支持 hash 查询参数，面板通过 `ctx.params` 读）。效果类型名在主数据里**没有字典**，取自 BWiki「支援卡效果一览」revid 35946（2026-10-27 抓取，ID 1–31），31 以外只显示「原始值 N」。新增 [docs/catalog.md](catalog.md)。
 >
 > P3-5 新增 `modules/succession/`：`succession_relation` 2133 组（点数只有 1/2/7/8）、`succession_relation_member` 4527 条、覆盖 95 名角色，`succession_relation_rank` 3 档（0–50 / 51–150 / 151+，与知识库 06 的 △/〇/⌾ 一致）。面板「相性」给两人相性（共享关系组卡片 + 连加式 + 等级）与**六人布局**（按社区口径分槽：1 号 f(0,1)、2 号 f(0,2)+f(1,2)、3/4 号 f(0,1,祖父母)、5/6 号 f(0,2,祖父母)，与目标同角色记 0）。**口径澄清三条**：① 关系组在主数据里没有名称字典，只显示编号与组内人数；② 两人点数之和 = 六人布局的 1 号位贡献，不是游戏内最终相性；③ 不含适性 —— 主数据里根本没有适性表（`%aptitude%` 查不到，`%proper%` 只有赛事侧出现率），所以「适性契合」这一项算不出来。实测：特别周 × 无声铃鹿 = 27 分（11 个共享组）/ △；六人布局（特别周 ← 无声铃鹿 / 东海帝王 + 1 位祖父母）= 91 分 / 〇。新增 [docs/succession.md](succession.md)。测试 121 → 134 例（`tests/test_succession.py` 13 例）。
+>
+> 2026-10-31：**应用图标**。用户给了一张 `Logo.png`，目标是打包后的 exe 图标就是它。改动：源图挪进 `packaging/Logo.png`；新增 `packaging/make-icon.ps1`（GDI+ 生成，不依赖 Pillow——`pillow` 在 dev 组声明但 `uv.lock` 未收录，`uv run` 会卡在重新解析依赖上），产出 `packaging/icon.ico`（16/24/32/48/64/128 用 32bpp BMP 帧 + 256 用 PNG 帧，共 7 帧）、`static/favicon.ico`（16/32/48）、`static/icon.png`（256）；spec 的 `EXE(icon=…)` 接上（非 Windows 平台不传，避免 CI 之外出错）；`index.html` 加 `rel="icon"` 与 `apple-touch-icon`；侧栏原来那个橙色 "U" 占位方块换成 34px 圆角品牌图。实测：`PyInstaller` 构建日志出现「Copying icon to EXE」，`ExtractAssociatedIcon` 取出的 32×32 与源图一致，exe 里能找到 256 帧的 PNG 签名；`packaging/smoke.ps1` 跑通（frozen=true、9 个模块 ok）；浏览器侧栏与 favicon 均生效。**已知**：pywebview 没有设置窗口图标的接口，源码模式（`uv run python -m app.desktop`）的任务栏图标仍是 Python 的，只有打包产物才是本图。
+>
+> 2026-10-31：**按钮风格统一**。原来 `styles.css` 只定义了 `button.primary` / `button.ghost`，另有 4 个裸 `<button>`（日程「刷新卡池排期」、赛道「重置 / 查询」、技能「查询」）直接吃浏览器原生灰样式；而且「刷新 X 数据」占着主操作色，真正的「查询」是灰的。现在：① `button` 有了基础规则（8px 圆角 / 8×16 内边距 / 13px / 描边次要态 / 统一 hover、`:disabled`、`:focus-visible`），`.ghost` 与之一致、只作语义标记，`.primary` 只换配色 + 悬停提亮；② 按「主操作 vs 次要操作」重新分档 —— 查询 / 计算 / 导入 / 提问 / 检查 = `primary`，刷新 / 重置 / 清空 / 关闭 / 删除 = 默认（日程两处刷新、赛道刷新与重置、技能刷新从 primary 降为次要，赛道 / 技能的「查询」升为 primary）；③ 选文件的 `.file-picker` 由虚线改实线，与旁边的「导入」并排时是同一个控件语言；④ 顺手修掉 status pill 在 flex 行里被压成竖排（「正/常」）的老问题（`.pill` 加 `white-space: nowrap; flex: none`）。七个页面逐个用 `getComputedStyle` 验过：动作按钮全部 8px / 13px，只剩胶囊形的 `.more-btn`（12px）与 `button.tag`（11px）两档轻量操作。约定写进 [docs/architecture.md](architecture.md) 的「前端约定」与项目 instructions。
+>
+> 2026-10-31：**日程页卡池的「+N」可以展开了**。必得 / 新春这类大杂烩池一行有几十张精选（快照里最多 68 张，`20013`「3★ WISH&GAZE 招募」），原来只列 4 张再挂一个死的 `+42` 标签，看不到剩下的。现在 `modules/events/ui/panel.js` 把 `+N` 做成按钮：点开显示全部、再点「收起」；展开状态存在 `expandedPickups`（按 `gacha_id`），所以勾选「显示最近已结束」或翻页重渲染后不丢。样式复用 `.tag`，只给 `button.tag` 补了 `font-family: inherit` 与 hover —— 标签外观不变但可点。
+>
+> 2026-10-31：**数据同步并进概览页的「数据版本」卡**。按「数据是几版、怎么换成新版」本来就该在一处：`modules/sync/manifest.toml` 的 `[ui]` 加 `hidden = true`（内核解析成 `ui.hidden`，`renderSidebar()` 一并过滤），面板保留、侧栏入口去掉；`static/app.js` 的 `renderOverview()` 把这张卡撑成 `<div id="overview-version">` + `<div id="overview-sync">`，用新抽出的 `loadPanel()` / `panelContext()` 以 `embedded: true` 挂载 sync 面板。面板据此不渲染页面标题、也不再套一层卡片（用 `h3` 分块），保留「从本机客户端更新 / 从文件导入 / 历史快照」三块；`#/sync` 仍可直达完整版页面。导入成功后 `refreshInfo()` 除了刷新侧栏徽标还会 `patchOverviewVersion()` 就地重画这张卡，避免整页重绘冲掉「检查客户端」的结果。顺手把 10 行 `datasets` 条数折进「数据集条数（N 项）」，卡片一打开就能看到更新入口。
+>
+> 顺带补了两处既有缺口：`scripts/sync-agent-customization.ps1` 原本是 **0 字节空文件**（说明里却要求改完 instructions 就跑它），现在实现了 instructions + 4 个 SKILL 的镜像与 `-Check` 比对（实测：首次 `-Check` 报 5 个不一致、退出码 1 → 写入 → 再比对 0 个、退出码 0，且 4 个 SKILL 原本就已过期）；`.github/instructions` 里「没有 `[ui]` 不进侧栏」的规则补上 `hidden = true` 这条。测试：`tests/test_sync.py` 增断言 `ui.hidden is True`。
+>
+> 2026-10-31：**协助卡详情改成「突破表」，并核实效果类型与固有加成的发动条件**。原来把 `support_card_effect_table` 的 `init` 与 `lv5..lv50` 平铺成「初始 / 各突破等级 / 满破 / 净增」六列，看到的是等级档位而不是「突破一次能换到什么」。现在按 `support_card_limit` 折算成 **0/1/2/3/4 突五列**（R 20/25/30/35/40、SR 25/30/35/40/45、SSR 30/35/40/45/50，362 张卡无缺口；导入进新表 `catalog_support_limits`，旧库没有该稀有度时回落到 `labels.SUPPORT_LEVEL_CAPS`），每列是「突破到该档并练到该档等级上限」时的值（`-1` 取不超过该档上限的最近一档），去掉「类型」「净增」两列。
+>
+> **核实结论（推翻旧说法）**：效果类型在主数据里**有字典**——`text_data` 151 = 名称、154 = 说明（31 条，官方措辞「初始友情槽提升 / 比赛加成 / 擅长率提升 / 技能点数加成」与 BWiki 的「初期羁绊计量格提升 / 赛后加成 / 得意率提升 / 技能Pt加成」不同），155 = 固有加成的**成句文案**（258/258 命中）。**101–120 不是普通效果**，而是「满足条件才生效」的加成：`value_N` 是条件参数、`value_N_1..4` 是参数对/效果值，含义随类型变化（101 友情槽阈值 80/100、102 友情槽阈值且限非擅长训练、103 编成卡类型种数、104 粉丝数、106 友情训练次数上限、108/114 体力、118 友情槽 60 时可能出现在两处、120 按编成卡给属性……），主数据没有逐类型参数表，**因此只显示 155 的原文、不换算数值**；解锁等级 `lv` 换算成「等级 N · 第 X 突起可达到」，练不到时明说。
+>
+> 改动：新增 `catalog_support_effect_types` / `catalog_support_unique_text` 两张表，效果名改为字典优先（BWiki 只在老库缺 151 时兜底）；固有效果从突破表里挪出来单独一块（它不随突破变化，留在表里会变成 5 列同值），`/api/catalog/items/support_card/*` 新增 `unique` 块；知识库结构化块改用 `breakthroughs` + `unique`（上一轮删掉 `gain` 后它还在读，会打出「净增 None」）。顺带发现 `type_N = 0` 是空槽位（110 行 `type_1 = 0`、1 行 `type_0 = 0`，value 恒为 0），导入时跳过，固有加成 516 → 405 条。实测：SSR 30001 得意率 0 突（30 级）20 → 3 突（45 级）35；R 10001 上限 20/25/30/35/40 下友情加成 10 → 15；SSR 30081 显示「友情槽达到80时 / 训练效果提升 / 解锁条件：等级 40 · 第 2 突起可达到」。测试 154 → 156 例（`tests/test_catalog.py` 断言档位换算、字典优先、条件型不给数值、解锁档换算与上限兜底）。
 
 > 2026-10-26：P3-1 的赛道部分完成，`races` 模块落地（详情见下）。
 >

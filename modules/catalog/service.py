@@ -7,8 +7,11 @@ from app.kernel.database import Database
 from app.kernel.dataversion import DataVersion, read_data_version
 
 from .labels import (
+    CONDITIONAL_EFFECT_MIN,
     EFFECT_LEVELS,
+    MAX_BREAKTHROUGH,
     SUPPORT_EFFECT_SOURCE,
+    SUPPORT_LEVEL_CAPS,
     attributes,
     skill_rarity_label,
     support_effect_label,
@@ -16,6 +19,21 @@ from .labels import (
 from .schema import ensure_schema
 
 KINDS = ("character", "support_card", "skill")
+
+
+def _value_at_level(init: int | None, levels: dict[int, int], level: int) -> int | None:
+    """等级 ``level`` 时的数值：取不超过它的最近一档，``init`` 相当于 1 级。
+
+    ``support_card_effect_table`` 只在数值变化的档位写值，其余档位是 -1（沿用上一档），
+    所以按顺序往后覆盖就是「升到该等级时的值」。``-1`` 已在上游过滤掉。
+    """
+    value = init
+    for step in sorted(levels):
+        if step > level:
+            break
+        value = levels[step]
+    return value
+
 
 _TABLE = {
     "character": ("catalog_characters", "card_id"),
@@ -41,6 +59,9 @@ class CatalogService:
                 "skills": self._count("catalog_skills"),
                 "character_skills": self._count("catalog_character_skills"),
                 "support_effects": self._count("catalog_support_effects"),
+                "support_limits": self._count("catalog_support_limits"),
+                "support_effect_types": self._count("catalog_support_effect_types"),
+                "support_unique_text": self._count("catalog_support_unique_text"),
                 "support_unique": self._count("catalog_support_unique"),
                 "support_skills": self._count("catalog_support_skills"),
             },
@@ -112,10 +133,16 @@ class CatalogService:
         if kind == "character":
             item["skills"] = self._character_skills(item_id)
         elif kind == "support_card":
-            item["effects"] = self._support_effects(item_id)
-            item["unique_effects"] = self._support_unique(item_id)
+            rarity = item["fields"].get("rarity")
+            names = self._effect_names()
+            item["effects"] = self._support_effects(item_id, names)
+            item["unique_effects"] = self._support_unique(item_id, names)
+            item["unique"] = self._support_unique_block(
+                rarity, item["unique_effects"], self._support_unique_text(item_id)
+            )
             item["skills"] = self._support_skills(item_id)
             item["effect_source"] = SUPPORT_EFFECT_SOURCE
+            item["breakthroughs"] = self._support_breakthroughs(rarity, item["effects"])
         # 详情必须带上数据版本，否则用户无法判断这条描述属于哪一版
         item["data_version"] = self.data_version().as_dict()
         return item
@@ -181,7 +208,7 @@ class CatalogService:
             result.append(skill)
         return result
 
-    def _support_effects(self, support_card_id: int) -> list[dict[str, Any]]:
+    def _support_effects(self, support_card_id: int, names: dict[int, str]) -> list[dict[str, Any]]:
         rows = self.db.query(
             "SELECT * FROM catalog_support_effects WHERE support_card_id = ? ORDER BY effect_type",
             (support_card_id,),
@@ -198,32 +225,123 @@ class CatalogService:
             result.append(
                 {
                     "effect_type": int(row["effect_type"]),
-                    "label": support_effect_label(row["effect_type"]),
+                    "label": self._effect_label(names, row["effect_type"]),
                     "init": init,
                     "levels": levels,
                     "max": top,
-                    # 满破净增：从初始值到满破值多出来的部分（无初始值时就是满破值本身）
-                    "gain": None if top is None else top - (init or 0),
                 }
             )
         return result
 
-    def _support_unique(self, support_card_id: int) -> list[dict[str, Any]]:
+    def _support_unique(self, support_card_id: int, names: dict[int, str]) -> list[dict[str, Any]]:
         rows = self.db.query(
             "SELECT slot, effect_type, value, need_lv FROM catalog_support_unique "
             "WHERE support_card_id = ? ORDER BY slot",
             (support_card_id,),
         )
-        return [
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            effect_type = row["effect_type"]
+            # 100 以上是条件型加成，value_N 是条件参数而不是加成数值，不换算也不回显
+            conditional = effect_type is not None and int(effect_type) >= CONDITIONAL_EFFECT_MIN
+            result.append(
+                {
+                    "slot": int(row["slot"]),
+                    "effect_type": effect_type,
+                    "label": None if conditional else self._effect_label(names, effect_type),
+                    "value": None if conditional else row["value"],
+                    "need_lv": row["need_lv"],
+                    "kind": "conditional" if conditional else "plain",
+                }
+            )
+        return result
+
+    def _support_unique_text(self, support_card_id: int) -> str | None:
+        """固有效果的官方成句文案（text_data 155），条件型加成的发动条件只在这里有。"""
+        row = self.db.query_one(
+            "SELECT text FROM catalog_support_unique_text WHERE support_card_id = ?",
+            (support_card_id,),
+        )
+        return row["text"] if row is not None else None
+
+    def _support_unique_block(
+        self,
+        rarity: int | None,
+        unique_effects: list[dict[str, Any]],
+        text: str | None,
+    ) -> dict[str, Any] | None:
+        """固有效果的展示块：官方文案 + 生效等级/突破档 + 可换算的普通槽位数值。"""
+        if not unique_effects:
+            return None
+        caps = self._support_level_caps(rarity)
+        need_lv = unique_effects[0]["need_lv"]
+        unlock = next(
+            (index for index, cap in enumerate(caps) if need_lv is None or cap >= need_lv),
+            None,
+        )
+        return {
+            "text": (text or "").replace("\\n", "\n") or None,
+            "conditional": any(row["kind"] == "conditional" for row in unique_effects),
+            "need_lv": need_lv,
+            # 第几突起才练得到这个等级；None = 该稀有度练不到
+            "unlock_breakthrough": unlock,
+            "items": [
+                {"label": row["label"], "value": row["value"]}
+                for row in unique_effects
+                if row["kind"] == "plain"
+            ],
+        }
+
+    def _support_level_caps(self, rarity: int | None) -> tuple[int, ...]:
+        """该稀有度 0–4 突的等级上限：优先用导入的 support_card_limit，旧库回落到内置表。"""
+        if rarity is not None:
+            row = self.db.query_one(
+                "SELECT limit_0, limit_1, limit_2, limit_3, limit_4 "
+                "FROM catalog_support_limits WHERE rarity = ?",
+                (rarity,),
+            )
+            if row is not None:
+                return tuple(int(row[f"limit_{index}"]) for index in range(MAX_BREAKTHROUGH + 1))
+        return SUPPORT_LEVEL_CAPS.get(rarity, ())
+
+    def _effect_names(self) -> dict[int, str]:
+        """效果类型 → 名称：主数据自带字典（text_data 151）优先，缺失时回落 BWiki 映射。"""
+        return {
+            int(row["effect_type"]): row["name"]
+            for row in self.db.query("SELECT effect_type, name FROM catalog_support_effect_types")
+        }
+
+    @staticmethod
+    def _effect_label(names: dict[int, str], effect_type: Any) -> str:
+        try:
+            key = int(effect_type)
+        except (TypeError, ValueError):
+            return support_effect_label(effect_type)
+        return names.get(key) or support_effect_label(key)
+
+    def _support_breakthroughs(
+        self,
+        rarity: int | None,
+        effects: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """把训练效果摊成「突破档位 × 数值」表。
+
+        每一列 = 突破到该档并升到该档等级上限时的值；训练效果按
+        ``support_card_effect_table`` 的等级档位取，``-1`` 的档沿用上一档。
+        固有效果不随突破档位变化（只是有解锁等级），所以不进这张表。
+        """
+        caps = self._support_level_caps(rarity)
+        if not caps:
+            return None
+
+        rows = [
             {
-                "slot": int(row["slot"]),
-                "effect_type": row["effect_type"],
-                "label": support_effect_label(row["effect_type"]),
-                "value": row["value"],
-                "need_lv": row["need_lv"],
+                "label": effect["label"],
+                "values": [_value_at_level(effect["init"], effect["levels"], cap) for cap in caps],
             }
-            for row in rows
+            for effect in effects
         ]
+        return {"level_caps": list(caps), "rows": rows}
 
     # ------------------------------------------------------------------ shape
     def _normalize(self, kind: str, id_column: str, row: sqlite3.Row) -> dict[str, Any]:

@@ -33,8 +33,11 @@ RARITY_LABELS: dict[str, dict[int, str]] = {
 SUPPORT_CARD_TYPE_LABELS = {1: "马娘", 2: "友人", 3: "团队"}
 
 # 协助卡效果类型（support_card_effect_table.type / support_card_unique_effect.type_N）。
-# master.mdb 里**没有**这张字典，名称来自 BWiki「支援卡效果一览」页（revid 35946，
-# 抓取于 2026-10-27），只在这个范围内可信；1–31 之外的取值一律回显原始编号。
+# **主数据里有字典**：``text_data`` category 151 = 名称、154 = 描述，导入进
+# ``catalog_support_effect_types`` 并优先使用（官方简中服措辞，例如「初始友情槽提升」
+# 而不是 BWiki 的「初期羁绊计量格提升」）。
+# 下面这份只在 mdb 快照缺 151（老日服库）时兜底，名称来自 BWiki「支援卡效果一览」
+# （revid 35946，抓取于 2026-10-27），只覆盖 1–31。
 SUPPORT_EFFECT_LABELS: dict[int, str] = {
     1: "友情加成",
     2: "干劲效果提升",
@@ -69,10 +72,30 @@ SUPPORT_EFFECT_LABELS: dict[int, str] = {
     31: "智力友情回复量提升",
 }
 
-SUPPORT_EFFECT_SOURCE = "BWiki 支援卡效果一览 revid 35946（2026-10-27 抓取；主数据无字典表）"
+SUPPORT_EFFECT_SOURCE = (
+    "简中服 master.mdb 的 text_data（151 效果名 / 154 效果说明 / 155 固有加成文案）；"
+    "缺这张字典的老库回落到 BWiki 支援卡效果一览 revid 35946（2026-10-27 抓取，仅 1–31）"
+)
 
-# 训练效果按突破等级逐档取值；-1 表示该档不提升（沿用上一档）
+# 条件型加成的类型下界：100 以上不是普通效果，而是「满足某条件才生效」的加成，
+# 具体条件由 text_data category 155 的整句文案给出（value_N 是各类参数，含义随类型变化）
+CONDITIONAL_EFFECT_MIN = 100
+
+# 训练效果按等级逐档取值（``init`` 相当于 1 级）；-1 表示该档不提升（沿用上一档）
 EFFECT_LEVELS = (5, 10, 15, 20, 25, 30, 35, 40, 45, 50)
+
+# 最高突破档位：0–4 突，4 突即满破
+MAX_BREAKTHROUGH = 4
+
+# 突破档位 → 卡等级上限：``support_card_limit``（简中服 2026-10-22 快照复核：
+# R 20/25/30/35/40、SR 25/30/35/40/45、SSR 30/35/40/45/50，362 张卡无缺口）。
+# 只有导入的 ``catalog_support_limits`` 没有该稀有度时（旧库未重新导入）才用它兜底，
+# 免得详情页因为缺一张小表就整块消失。
+SUPPORT_LEVEL_CAPS: dict[int, tuple[int, ...]] = {
+    1: (20, 25, 30, 35, 40),
+    2: (25, 30, 35, 40, 45),
+    3: (30, 35, 40, 45, 50),
+}
 
 BOOLEAN_LABELS = {0: "否", 1: "是"}
 

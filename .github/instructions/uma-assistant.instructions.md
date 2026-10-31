@@ -26,7 +26,7 @@ uv run python -m app.desktop --no-window --port 8742   # 后台起服务（前�
 
 - `manifest.toml` 的 `id` 必须等于目录名；表名一律 `<id>_*`。
 - `requires` 只决定**加载顺序**，不传递 Python 依赖。**模块之间不互相 import**；跨模块展示只在面板里调对方 HTTP 接口，并降级处理失败（见 `modules/events/ui/panel.js` 的卡池 / 大赛卡）。
-- 没有 `[ui]` 的模块只提供接口、不进侧栏（如 `modules/gacha`）；`static/app.js` 的 `renderSidebar()` 按 `ui.panel` 过滤。
+- 没有 `[ui]` 的模块只提供接口、不进侧栏（如 `modules/gacha`）；`static/app.js` 的 `renderSidebar()` 按 `ui.panel` 过滤。要**有面板但不占侧栏**（面板被别的页面内嵌，如概览页里的数据同步）时写 `[ui] hidden = true`，内嵌方用 `panelContext({ embedded: true })` 挂载，面板据此不渲染页面标题、也不套外层卡片。
 - 口径（百分比、状态判定、时区换算、降级规则、告警）写在 service/importer 并回显在接口里，面板只做展示与格式化。
 
 ## 数据来源纪律
@@ -59,6 +59,7 @@ $t = [System.IO.File]::ReadAllText($p)
 - 长描述加 `class="meta clamp"`（两行截断）；次要明细（来源清单等）放 `<details>` 默认收起。
 - 改完面板要**重启服务 + 浏览器实测**：CDP `Network.setCacheDisabled` + `Network.clearBrowserCache`，URL 加 `?v=<时间戳>` 绕过模块缓存；并确认 `.main-scroll` 没有横向滚动条（`scrollWidth === clientWidth`）。
 - 不引入打包工具与前端框架；样式复用 `static/styles.css` 里已有的 card / toolbar / list-row / pill / tag / seg-table / more-btn。
+- 按钮只有三档，**不要给 `<button>` 另写内联样式**：默认（描边：刷新 / 重置 / 清空 / 关闭 / 删除）、`class="primary"`（主操作：查询 / 计算 / 导入 / 提问 / 检查，每张卡最多一个）、胶囊形轻量操作（`.more-btn` / `.chip` / `button.tag`）。`styles.css` 的 `button` 基础规则统一了圆角、内边距、字号、hover 与 disabled，新增按钮直接写在 markup 里就对齐。
 
 ## 测试约定
 

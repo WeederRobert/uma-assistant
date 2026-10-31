@@ -67,6 +67,9 @@ class ImportSummary:
     text_entries: int = 0
     character_skills: int = 0
     support_effects: int = 0
+    support_limits: int = 0
+    support_effect_types: int = 0
+    support_unique_text: int = 0
     support_unique: int = 0
     support_skills: int = 0
     data_version: str = ""
@@ -84,6 +87,9 @@ class ImportSummary:
             "text_entries": self.text_entries,
             "character_skills": self.character_skills,
             "support_effects": self.support_effects,
+            "support_limits": self.support_limits,
+            "support_effect_types": self.support_effect_types,
+            "support_unique_text": self.support_unique_text,
             "support_unique": self.support_unique,
             "support_skills": self.support_skills,
             "data_version": self.data_version,
@@ -205,6 +211,9 @@ def import_master_mdb(
             conn.execute("DELETE FROM catalog_support_cards")
             conn.execute("DELETE FROM catalog_skills")
             conn.execute("DELETE FROM catalog_character_skills")
+            conn.execute("DELETE FROM catalog_support_limits")
+            conn.execute("DELETE FROM catalog_support_effect_types")
+            conn.execute("DELETE FROM catalog_support_unique_text")
             conn.execute("DELETE FROM catalog_support_effects")
             conn.execute("DELETE FROM catalog_support_unique")
             conn.execute("DELETE FROM catalog_support_skills")
@@ -213,8 +222,15 @@ def import_master_mdb(
             summary.support_cards = _import_support_cards(source_conn, conn, tables, summary)
             summary.skills = _import_skills(source_conn, conn, tables, summary)
             summary.character_skills = _import_character_skills(source_conn, conn, tables, summary)
+            summary.support_limits = _import_support_limits(source_conn, conn, tables, summary)
+            summary.support_effect_types = _import_support_effect_types(
+                source_conn, conn, tables, summary
+            )
             summary.support_effects = _import_support_effects(source_conn, conn, tables, summary)
             summary.support_unique = _import_support_unique(source_conn, conn, tables, summary)
+            summary.support_unique_text = _import_support_unique_text(
+                source_conn, conn, tables, summary
+            )
             summary.support_skills = _import_support_skills(source_conn, conn, tables, summary)
 
         summary.text_entries = int(
@@ -244,17 +260,24 @@ def import_master_mdb(
             "text_entries": summary.text_entries,
             "character_skills": summary.character_skills,
             "support_effects": summary.support_effects,
+            "support_limits": summary.support_limits,
+            "support_effect_types": summary.support_effect_types,
+            "support_unique_text": summary.support_unique_text,
             "support_skills": summary.support_skills,
         },
     )
     logger.info(
-        "导入完成 | 马娘=%d 协助卡=%d 技能=%d | 马娘技能=%d 效果=%d 固有=%d 卡技能=%d | %s",
+        "导入完成 | 马娘=%d 协助卡=%d 技能=%d | 马娘技能=%d 上限=%d 效果=%d 类型名=%d 固有=%d "
+        "固有文案=%d 卡技能=%d | %s",
         summary.characters,
         summary.support_cards,
         summary.skills,
         summary.character_skills,
+        summary.support_limits,
         summary.support_effects,
+        summary.support_effect_types,
         summary.support_unique,
+        summary.support_unique_text,
         summary.support_skills,
         summary.data_version,
     )
@@ -482,6 +505,128 @@ def _import_character_skills(
     return len(payload)
 
 
+def _import_support_limits(
+    src: sqlite3.Connection,
+    dst: sqlite3.Connection,
+    tables: set[str],
+    summary: ImportSummary,
+) -> int:
+    """协助卡各突破档位的等级上限：``support_card_limit``。
+
+    一行一个稀有度，``limit_0..limit_4`` 对应 0–4 突。这张表决定「突破一次并升到
+    上限」具体是多少级；缺了就只能按 ``labels.SUPPORT_LEVEL_CAPS`` 的内置值兜底。
+    """
+    if "support_card_limit" not in tables:
+        summary.skipped["support_limits"] = "缺少 support_card_limit"
+        return 0
+
+    columns = _columns(src, "support_card_limit")
+    wanted = ["rarity", *(f"limit_{index}" for index in range(5))]
+    missing = [column for column in wanted if column not in columns]
+    if missing:
+        summary.skipped["support_limits"] = f"support_card_limit 缺 {'、'.join(missing)}"
+        return 0
+
+    rows = src.execute(
+        "SELECT rarity, limit_0, limit_1, limit_2, limit_3, limit_4 FROM support_card_limit"
+    ).fetchall()
+    payload = [
+        (
+            row["rarity"],
+            row["limit_0"],
+            row["limit_1"],
+            row["limit_2"],
+            row["limit_3"],
+            row["limit_4"],
+        )
+        for row in rows
+        if row["rarity"] is not None
+    ]
+    dst.executemany(
+        "INSERT OR REPLACE INTO catalog_support_limits "
+        "(rarity, limit_0, limit_1, limit_2, limit_3, limit_4) VALUES (?, ?, ?, ?, ?, ?)",
+        payload,
+    )
+    return len(payload)
+
+
+def _import_support_effect_types(
+    src: sqlite3.Connection,
+    dst: sqlite3.Connection,
+    tables: set[str],
+    summary: ImportSummary,
+) -> int:
+    """协助卡效果类型字典：``text_data`` category 151（名称）/ 154（描述）。
+
+    简中服客户端**自带这张字典**，1–31 有官方中文名；101 以上是条件型加成，
+    不在这张表里（它们的文案在 category 155）。
+    """
+    if "text_data" not in tables:
+        summary.skipped["support_effect_types"] = "缺少 text_data"
+        return 0
+
+    names = {
+        int(row["index"]): row["text"]
+        for row in src.execute(
+            'SELECT "index", text FROM text_data WHERE category = 151 AND text IS NOT NULL'
+        )
+    }
+    if not names:
+        summary.skipped["support_effect_types"] = "text_data 没有 category 151（效果类型名）"
+        return 0
+    descriptions = {
+        int(row["index"]): row["text"]
+        for row in src.execute(
+            'SELECT "index", text FROM text_data WHERE category = 154 AND text IS NOT NULL'
+        )
+    }
+    payload = [
+        (effect_type, name, descriptions.get(effect_type)) for effect_type, name in names.items()
+    ]
+    dst.executemany(
+        "INSERT OR REPLACE INTO catalog_support_effect_types (effect_type, name, description) "
+        "VALUES (?, ?, ?)",
+        payload,
+    )
+    return len(payload)
+
+
+def _import_support_unique_text(
+    src: sqlite3.Connection,
+    dst: sqlite3.Connection,
+    tables: set[str],
+    summary: ImportSummary,
+) -> int:
+    """协助卡固有效果的官方展示名：``text_data`` category 155。
+
+    一行按 ``unique_effect_id`` 索引，涵盖同一行的两个槽位；条件型加成（101–120）
+    会把发动条件写进这句话（例如「友情槽达到80时\\n训练效果提升」），
+    这是主数据里唯一能核实条件的来源。
+    """
+    if not {"text_data", "support_card_unique_effect"}.issubset(tables):
+        summary.skipped["support_unique_text"] = "缺少 text_data / support_card_unique_effect"
+        return 0
+
+    # support_card_unique_effect.id 就是卡 id（已核对：258 张卡的 unique_effect_id 与 id 全等）
+    rows = src.execute(
+        """
+        SELECT u.id AS support_card_id, t.text AS text
+        FROM support_card_unique_effect AS u
+        JOIN text_data AS t
+            ON t.category = 155 AND t."index" = u.id
+        """
+    ).fetchall()
+    payload = [(row["support_card_id"], row["text"]) for row in rows if row["text"]]
+    if not payload:
+        summary.skipped["support_unique_text"] = "text_data 没有 category 155（固有效果文案）"
+        return 0
+    dst.executemany(
+        "INSERT OR REPLACE INTO catalog_support_unique_text (support_card_id, text) VALUES (?, ?)",
+        payload,
+    )
+    return len(payload)
+
+
 def _import_support_effects(
     src: sqlite3.Connection,
     dst: sqlite3.Connection,
@@ -490,7 +635,7 @@ def _import_support_effects(
 ) -> int:
     """协助卡训练效果数值：``support_card_effect_table``。
 
-    ``init`` 是初始值，``limit_lv5..limit_lv50`` 是各突破等级的值，
+    ``init`` 是 1 级的值，``limit_lv5..limit_lv50`` 是该等级的值，
     ``-1`` 表示该档不提升（沿用上一档），原样存下来让展示层决定怎么显示。
     """
     if "support_card_effect_table" not in tables:
@@ -567,7 +712,9 @@ def _import_support_unique(
         for slot in (0, 1):
             effect_type = data.get(f"type_{slot}")
             value = data.get(f"value_{slot}")
-            if effect_type is None:
+            # type_N = 0 是空槽位（简中服快照里 110 行 type_1 = 0、1 行 type_0 = 0，
+            # 对应的 value 一律为 0），导进来只会多一行「原始值 0 +0」
+            if not effect_type:
                 continue
             payload.append((data["id"], slot, effect_type, value, need_lv))
     dst.executemany(
