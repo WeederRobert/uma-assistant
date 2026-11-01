@@ -28,7 +28,7 @@
 | 文件日志（`data/logs/app.log`，1 MB × 3 轮转） | `app/kernel/logging.py` | `tests/test_logging.py`；实际启动后日志含 uvicorn 与模块输出 | ✅ |
 | 知识库模块：文档上传 / 切块 / 向量检索 / 带引用回答 | `modules/knowledge/` | 上传 md → 检索命中 → 删除 | ✅ |
 | 数据同步模块：设备提取 / 上传 / 幂等 / 快照历史 | `modules/sync/` | `tests/test_sync.py`（13 例）；面板内嵌在概览「数据版本」卡（`[ui] hidden = true`，不进侧栏），浏览器实测「检查客户端」与上传 | ✅ |
-| 内置机制知识库素材（11 篇，带来源 / 版本 / 可信级别） | `docs/kb/` | 导入 11 篇 → 165 个切块；新增 BWiki 来源（状态效果、赛事名称、相性算法、赛道几何）与「数据版本与更新流程」（kb README 3.4） | ✅ |
+| 内置机制知识库素材（12 篇，带来源 / 版本 / 可信级别） | `docs/kb/` | 导入 12 篇 → 178 个切块（`11-gacha-and-planning.md` 2026-11-01 新增 8 块）；新增 BWiki 来源（状态效果、赛事名称、相性算法、赛道几何、简中预测卡池）与「数据版本与更新流程」（kb README 3.4） | ✅ |
 | 活动 / 卡池 / 日程（BWiki SMW 抓取 + 差异审计 + 日程面板） | `modules/events/` | `tests/test_events.py`（25 例）；真实抓取 202 条简中服卡池；浏览器「日程」页实测 | ✅ |
 | **日程汇总页**（卡池排期 + 大赛排期 + BWiki 时间轴同页；大赛默认只看未结束） | `modules/events/ui/panel.js` | 浏览器实测：41 条未来卡池 / 22 条进行中 / 大赛 2 届（取消勾选 29 届） | ✅ 2026-10-27 |
 | 知识库问答（文档检索 + 结构化数据优先） | `modules/knowledge/`（`structured.py`） | `tests/test_knowledge_structured.py`（15 例）；实测「这届大赛的赛道终直」「加快步伐的技能条件」「现在有什么卡池」均命中结构化数据 | ✅ 2026-10-28 |
@@ -37,6 +37,7 @@
 | 技能库（条件表达式 + 效果参数 + 反查马娘 / 协助卡 + 进化关系） | `modules/skills/` | `tests/test_skills.py`（15 例）；1289 技能 / 1450 槽位 / 1895 效果 / 345 进化 | ✅ 2026-10-27 |
 | 相性查询（两人关系组点数 + 六人继承布局） | `modules/succession/` | `tests/test_succession.py`（13 例）；真实库 2133 关系组 / 4527 成员 / 95 角色；特别周 × 无声铃鹿 = 27 分 △、六人布局示例 91 分 〇 | ✅ 2026-10-28 |
 | 社团粉丝（**实验性**）：社团当月增粉 + 逐成员贡献占比 | `modules/circles/` | `tests/test_circles.py`（10 例）；真实拉取 159 个社团，颂乐人偶 30 人合计 158.72 亿 vs 榜单 158.73 亿（差 0.0x%）；面板实测搜索 / 展开成员 / 缓存命中 | ✅ 2026-11-01（已并入 main） |
+| **千里眼 + 萝卜规划**（近半年卡池 / 活动预测 + 够不够抽） | `modules/planner/` | `tests/test_planner.py`（17 例）；真实数据：mdb 已确认 42 条（到 2027-01-26）、wiki 预测 118 条 / 重叠 20 条、活动 97 条，偏移实测 1104 天（136 组卡池全一致）；半年窗口 11 个预测卡池 + 13 个活动；浏览器实测勾选 / 试算 / 保存方案 | ✅ 2026-11-01 |
 | 赛道几何「切线」口径（首段未列出的开场直线） | `modules/races/geometry.py` | 107 条几何中 12 条带切线，`opening_straight` 入库；`tests/test_races.py` 断言 |
 | 赛事目录与赛道几何（mdb 赛事 1525 场 + BWiki 赛道 107 条分段 / 坡道） | `modules/races/` | `tests/test_races.py`（24 例）；真实刷新 `races=1525 / courses=121 / geometry=107`，4 条源数据缺陷出告警；6 条示例赛道与知识库一致 | ✅ |
 | 知识库素材重复导入的覆盖语义 | `scripts/import_kb.py` | 同名素材内容变化时先删旧版本再导入（`--keep-stale` 可关闭） | ✅ |
@@ -269,7 +270,7 @@ flowchart LR
 | `skills` | 技能条件与效果、反查马娘与协助卡、进化技能 | mdb | catalog | ✅ v0.1（P3-3） |
 | `succession` | 相性：两人关系组点数、六人继承布局分数与等级。增强项：三代血统规划器 | mdb | catalog | ✅ v0.1（P3-5）；增强待排期（P2） |
 | `circles` | 社团粉丝（实验性）：社团当月增粉、成员贡献占比；面板可展开成员明细 | 第三方 `umamusume.space` 公开只读接口 | — | 🧪 v0.1（已并入 main） |
-| `planner` | 萝卜 / 券 / 天井预算规划，本地保存多套方案（参考 uma.moe Carat Planner） | 本地计算 + `gacha` 排期 | gacha | 待排期（优先级 P1） |
+| `planner` | 千里眼：近半年卡池 / 活动预测（mdb 已确认段 + BWiki 简中预测 + 卡池偏移换算活动），萝卜 / 券 / 天井预算规划，本地保存多套方案 | mdb（A）+ BWiki SMW `[[简中::未实装]]` 预测卡池与活动表（C）+ 本地计算 | — | ✅ v0.1（P1，2026-11-01） |
 | `factors` | 因子图鉴：因子 id / 效果 / 初始因子 | mdb | — | 待排期（优先级 P3） |
 | `gacha` | 卡池排期（含未来卡池）、精选卡片、预告；面板并入「日程」页。增强项：天井 / 兑换 / 碎片 / step-up / 付费池标记 | mdb | catalog | ✅ v0.1；增强待排期（P1） |
 | `support` | 协助卡加成（按突破等级）、固有加成、金技能 | mdb | catalog, skills | P3-4 |
@@ -279,16 +280,25 @@ flowchart LR
 
 **已移出计划**：`training`（育成规划）不做，见「不做的事」。
 
+### 决策记录：千里眼（2026-11-01）
+
+| | 内容 |
+| --- | --- |
+| 原判断 | 2026-10-27：**不跟踪日服**，且「不做预测发布」——理由是跨服进度不同步，mdb 里已有真实排期 |
+| 新证据 | BWiki 的 `简中卡池` 页有「预测卡池」表，SMW 查询 `[[分类:赛马娘卡池]][[简中::未实装]]` 直接给出 `简中开始时间` / `简中结束时间`（138 条，覆盖到 2029）。这些是**简中时间**，不是日服排期；同时页面自带日服 `开始描述`，相减可得偏移——实测 136 组全是 1104 天（`spread 1104~1104`） |
+| 新结论 | 不抓日服 / 繁中服的**排期来源**（原判断仍成立），但允许读 wiki 已算好的**简中预测属性**；活动用卡池偏移换算并标 C 级推断。mdb 的 42 条已确认排期仍是 A 级主数据，wiki 预测只补 `horizon` 之后那一段，与 mdb 重叠的行单独标 `overlap` 不参与规划 |
+| 影响 | 新增 `planner` 模块；`events` 的「不跟踪活动」限制仍在（它只做简中卡池抓取），活动预测只在「规划」页可见 |
+
 ## 功能参考：uma.moe（2026-11-01）
 
 对标国际服站点 <https://uma.moe> 的 10 个入口（Database / Veterans / Clubs / Rankings / Activity / Tierlist / Timeline / Tools），按「数据能不能拿到」分三类，结论如下。原始清单已并入本表后删除。
 
 | uma.moe 功能 | 我们的结论 | 数据来源 |
 | --- | --- | --- |
-| Carat Planner（萝卜 / 券 / 天井规划） | **做**（P1）→ `planner` | 纯本地计算 + `gacha` 排期 |
+| Carat Planner（萝卜 / 券 / 天井规划） | **已做**（P1）→ `planner`：mdb 排期 + BWiki 预测段一起规划，多套方案本地保存 | 纯本地计算 + mdb 成本列 + BWiki 预测 |
 | 卡池细节（天井 / 兑换 / 碎片 / step-up / 付费池） | **做**（P1）→ `gacha` 增强 | `gacha_piece` / `gacha_exchange` / `gacha_stepup` / `paid_gacha_button_type` |
 | Lineage Planner（三代血统） | **做**（P2）→ `succession` 增强 | `succession_relation*` |
-| Timeline（卡池 / 活动档期） | **做**（P2）→ `events` 增强为月历；**不做「预测发布」**，mdb 里有真实排期 | BWiki + mdb |
+| Timeline（卡池 / 活动档期） | **已做**（P1）→ `planner` 千里眼：mdb 已确认段 + BWiki 简中预测段 + 活动换算；月历视图仍留给 `events`（P2） | BWiki `[[简中::未实装]]` 的 `简中开始时间` + mdb |
 | Database（继承马库） | 只借交互，**不做社区收藏库**；因子本体走 `factors`（P3） | `succession_factor*` |
 | Tierlist（支援卡梯度） | 不做「官方梯度」；如要做只能标为自定权重 | `support_card_effect_table` |
 | Team Stadium 统计 | 规则表可做，**社区使用率不做**（需要玩家样本） | `team_stadium*` |

@@ -139,6 +139,7 @@ uma-assistant/
 │  ├─ succession/        # 相性：两人关系组点数 + 六人继承布局分数与等级
 │  ├─ circles/           # 社团（实验性）：第三方站点公开接口 → 社团月增粉丝与成员贡献占比
 │  ├─ gacha/             # 卡池：master.mdb 排期（含未来卡池）与精选卡片，面板并入「日程」页
+│  ├─ planner/           # 规划：千里眼（近半年卡池 / 活动预测）+ 萝卜与抽券规划
 │  └─ _template/         # 新模块脚手架（下划线开头不会被加载）
 ├─ static/               # 前端壳：侧栏、路由、数据版本徽标
 ├─ scripts/              # 一键启动、数据导入与开发脚本
@@ -172,6 +173,7 @@ uma-assistant/
 | 相性 | `master.mdb` 的 `succession_relation` / `_member` / `_rank`（2133 组 / 4527 成员 / 3 档），两人点数与六人布局分数；明确不含适性（主数据无适性表） | [docs/succession.md](docs/succession.md) |
 | 社团粉丝（实验性） | 第三方站点 `umamusume.space` 的公开只读接口：社团当月增粉 + 逐成员贡献占比；数据由玩家自采、非官方，站点未收录的社团查不到，接口改版即失效 | [docs/circles.md](docs/circles.md) |
 | 卡池预告 | `master.mdb` 的 `gacha_data`／`text_data`／`gacha_available` 给出卡池排期与精选，含尚未开放的未来卡池（当期快照排到 2027-01-18），已用 BWiki 当期卡池交叉验证；面板并入「日程」页 | [docs/gacha.md](docs/gacha.md) |
+| 千里眼 / 萝卜规划 | mdb 已确认段（A 级）+ BWiki `[[简中::未实装]]` 预测卡池（C 级，带 `简中开始时间`）；活动表只有日服时间，用卡池反推的偏移（实测 1104 天，136 组校验）换算。天井萝卜 = `gacha_exchange.pay_item_num` × `cost_single`；收入由用户自填 | [docs/planner.md](docs/planner.md) |
 | 日志 | 控制台 + `data/logs/app.log`，`RotatingFileHandler` 1 MB × 3 份；uvicorn 也走同一份配置 | — |
 | 打包发布 | PyInstaller 出**精简版**（44 MB，不含 ML 依赖）；`UMA_BUNDLE_ML=1` 出完整版；CI 在 `windows-latest` 上出包并跑启动冒烟 | [docs/packaging.md](docs/packaging.md) |
 | 运行时落点 | 源码运行写项目内 `data/`；打包后写 `%LOCALAPPDATA%\uma-assistant\data\`，只读资源走 `_MEIPASS`，业务代码只认 `Settings.data_dir` / `tmp_dir` | [docs/packaging.md](docs/packaging.md) |
@@ -193,6 +195,7 @@ uma-assistant/
 | `succession` | 相性：两只马娘的共享关系组与点数、六人继承布局总分与等级，数据来自 `master.mdb` 的 `succession_relation*`；不含适性 | `/api/succession` |
 | `circles` | **实验性**：读第三方站点 `umamusume.space` 的公开接口，看社团当月增粉与逐成员贡献占比；数据由玩家自采、非官方，站点未收录的社团查不到 | `/api/circles` |
 | `gacha` | 卡池排期与精选卡片，来自 `master.mdb`（含未来卡池，可提前预告下一期）；**面板并入「日程」页**，本模块只提供接口 | `/api/gacha` |
+| `planner` | 千里眼：近半年的卡池与活动预测（mdb 已确认段 + BWiki 简中预测），并按用户的萝卜、抽券与月收入算「够不够抽」，可保存多套方案 | `/api/planner` |
 
 ## 合规边界
 

@@ -223,6 +223,41 @@ def test_gacha_fact_lists_active_and_upcoming() -> None:
     assert any(line.startswith("未开始：精选 协助卡招募") for line in lines)
 
 
+def test_forecast_fact_reports_predicted_pools_and_offset() -> None:
+    lookup, _ = build_lookup(
+        {
+            "/api/planner/forecast": {
+                "horizon": {"confirmed_until_local": "2027-01-26T11:59:59+08:00"},
+                "offset": {"median_days": 1104.0, "pairs": 136},
+                "pools": [
+                    {"segment": "confirmed", "title": "精选 优俊少女招募"},
+                    {
+                        "segment": "predicted",
+                        "title": "强击 UP卡池",
+                        "starts_local": "2027-01-27T12:00:00+08:00",
+                        "ends_local": "2027-02-08T11:59:59+08:00",
+                    },
+                ],
+                "events": [
+                    {
+                        "title": "剧情活动「测试」",
+                        "starts_local": "2027-02-08T12:00:00+08:00",
+                        "basis_label": "偏移推算",
+                    }
+                ],
+            }
+        }
+    )
+
+    result = lookup.lookup("接下来半年有什么卡池和活动")
+
+    fact = next(item for item in result.facts if item.topic == "forecast")
+    assert any("强击 UP卡池" in line and "C 级推算" in line for line in fact.lines)
+    assert any("1104 天" in line for line in fact.lines)
+    # 已确认段由 gacha 话题负责，预测事实里不重复列
+    assert all("精选 优俊少女招募" not in line for line in fact.lines)
+
+
 def test_catalog_fact_reports_breakthrough_values() -> None:
     lookup, _ = build_lookup(
         {

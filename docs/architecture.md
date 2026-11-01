@@ -32,6 +32,7 @@ flowchart TD
         SUC[succession<br/>相性关系组 / 六人布局]
         CIR[circles<br/>社团粉丝 / 成员贡献（实验性）]
         GAC[gacha<br/>卡池排期 / 精选（面板在日程页）]
+        PLN[planner<br/>千里眼 / 萝卜规划]
         NEXT[后续模块<br/>知识库与结构化数据打通]
     end
 
@@ -63,6 +64,7 @@ flowchart TD
     SKL --> V
     SUC --> V
     GAC --> V
+    PLN --> V
     CIR --> V
 ```
 
@@ -117,7 +119,7 @@ sequenceDiagram
 
 | 位置 | 用途 |
 | --- | --- |
-| `data/app.db` | 共享 SQLite（WAL）；`meta` 表 + 各模块的 `catalog_*` / `events_*` / `races_*` / `skills_*` / `succession_*` / `gacha_*` / `circles_*` 等表 |
+| `data/app.db` | 共享 SQLite（WAL）；`meta` 表 + 各模块的 `catalog_*` / `events_*` / `races_*` / `skills_*` / `succession_*` / `gacha_*` / `circles_*` / `planner_*` 等表 |
 | `data/modules/<id>/` | 模块私有文件（知识库的 `chroma/`、`documents.json`、`uploads/`；日程与赛道的 `cache/` 抓取缓存等） |
 | `data/mdb/master.mdb` | 从设备提取的游戏数据文件留档（`UMA_SYNC_KEEP_MDB=false` 可关） |
 | `data/snapshots/<版本>.json` | 每次数据导入的元信息与校验和，用于回答"这版数据从哪来" |
@@ -164,4 +166,5 @@ sequenceDiagram
 | 新的技能字段或反查路径 | [skills.md](skills.md)；连接键与降级规则在 `modules/skills/importer.py` |
 | 相性 / 继承布局相关 | [succession.md](succession.md)；关系组口径在 `modules/succession/service.py` 顶部 docstring |
 | 卡池 / 抽卡相关内容 | [gacha.md](gacha.md)；排期与精选在 `modules/gacha/importer.py` |
+| 千里眼预测 / 萝卜规划 | [planner.md](planner.md)；偏移推算在 `modules/planner/sources.py`，成本口径在 `modules/planner/importer.py` |
 | UI 结构或主题 | `static/`（外壳），模块只提供面板内容 |
