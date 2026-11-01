@@ -18,4 +18,8 @@ def setup(ctx: ModuleContext) -> Module:
             "启动时补导入卡池排期：%d 个卡池（未来 %d）", summary.banners, summary.upcoming
         )
     ctx.logger.info("卡池模块就绪")
-    return Module(router=build_router(service), status=service.status)
+    return Module(
+        router=build_router(service),
+        status=service.status,
+        refresh=lambda: service.refresh(force=True),
+    )

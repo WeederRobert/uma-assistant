@@ -31,4 +31,14 @@ def build_router(service: CatalogService) -> APIRouter:
             raise HTTPException(status_code=404, detail="未找到该条目")
         return found
 
+    @router.get("/list")
+    def list_items(
+        kind: str = Query(description="character / support_card / skill"),
+        limit: int = Query(default=30, ge=1, le=100),
+    ) -> dict:
+        """无关键词的浏览列表（「图鉴」页按标签页限定类型时用）。"""
+        if kind not in KINDS:
+            raise HTTPException(status_code=422, detail=f"kind 必须是 {KINDS} 之一")
+        return {"kind": kind, "items": service.list_kind(kind, limit=limit)}
+
     return router

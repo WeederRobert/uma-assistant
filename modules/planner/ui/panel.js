@@ -95,7 +95,6 @@ export default {
             </select>
           </label>
           <label><input id="planner-overlap" type="checkbox" /> 显示与 mdb 重叠的预测行</label>
-          <button class="ghost" id="planner-refresh">刷新预测</button>
           <span class="hint" id="planner-hint">加载中…</span>
         </div>
         <div id="planner-forecast"></div>
@@ -242,7 +241,7 @@ export default {
           "预测卡池（BWiki，已按实测偏差校正）",
           predicted,
           poolRow,
-          "BWiki 没有给出超出已确认段的预测行；点「刷新预测」重新抓一次。",
+          "BWiki 没有给出超出已确认段的预测行；在「概览」页点一次「一键刷新」再抓。",
         )}
         ${section(
           "event",
@@ -467,29 +466,6 @@ export default {
         await loadForecast();
       } catch (error) {
         toast(`加载失败：${error.message}`);
-      }
-    });
-
-    root.querySelector("#planner-refresh").addEventListener("click", async (event) => {
-      const button = event.currentTarget;
-      button.disabled = true;
-      try {
-        const result = await api(`${API}/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ force: true }),
-        });
-        const counts = result.counts || {};
-        toast(
-          `已刷新：预测 ${counts.predicted || 0} · 活动 ${counts.events || 0}` +
-            (result.calibration?.pairs ? ` · 偏差按最近实测 +${result.calibration.used_days} 天` : ""),
-        );
-        await loadForecast();
-        await loadStatus();
-      } catch (error) {
-        toast(`刷新失败：${error.message}`);
-      } finally {
-        button.disabled = false;
       }
     });
 

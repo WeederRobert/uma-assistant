@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.kernel.api import _format_summary
 from app.kernel.config import Settings
 from app.kernel.database import Database
 from app.kernel.dataversion import write_data_version
@@ -29,6 +30,30 @@ def test_system_info_reports_unknown_data_version(settings: Settings) -> None:
     assert by_id["catalog"]["status"] == "ok"
     assert by_id["knowledge"]["ui"]["panel"] == "/module-assets/knowledge/panel.js"
     assert by_id["catalog"]["details"]["counts"]["characters"] == 0
+    # 侧栏顺序由 order 决定，前端不再自己排
+    assert by_id["knowledge"]["order"] < by_id["catalog"]["order"] < by_id["races"]["order"]
+
+
+def test_refresh_summary_picks_readable_fields() -> None:
+    assert _format_summary({"summary": {"races": 1525, "courses": 121}}) == "赛事 1525 · 赛道 121"
+    assert _format_summary({"counts": {"predicted": 118, "events": 33}}) == "预测 118 · 活动 33"
+    assert (
+        _format_summary({"imported": False, "reason": "本地库已是这一版数据"})
+        == "本地库已是这一版数据"
+    )
+    # races 的形状：catalog + geometry
+    assert (
+        _format_summary({"catalog": {"races": 1525, "courses": 121}, "geometry": {"courses": 107}})
+        == "赛事 1525 · 赛道 121 · 几何 107"
+    )
+    # events 的形状：totals
+    assert (
+        _format_summary({"totals": {"added": 0, "changed": 2, "removed": 1}})
+        == "新增 0 · 变更 2 · 移除 1"
+    )
+    # 来源元信息不进摘要
+    assert _format_summary({"counts": {"skills": 1289, "data_version": "mdb-x"}}) == "技能 1289"
+    assert _format_summary(None) == ""
 
 
 def test_system_info_exposes_first_run_guidance(settings: Settings) -> None:

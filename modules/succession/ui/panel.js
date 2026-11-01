@@ -45,19 +45,11 @@ export default {
 
     root.innerHTML = `
       <h1 class="page-title">相性</h1>
-      <p class="page-desc">选两只马娘，看她们能带来多少相性分。技术口径（关系组编号、适性缺失等）都收在下面的「数据来源」与「口径说明」里。</p>
+      <p class="page-desc">选两只马娘，看她们能带来多少相性分。技术口径（关系组编号、适性缺失等）都收在下面的「数据概况」与「口径说明」里。</p>
 
       <section class="card">
-        <div class="toolbar">
-          <button class="ghost" id="succ-refresh">刷新相性数据</button>
-          <span class="hint" id="succ-mdb"></span>
-          <span class="hint" id="succ-stale"></span>
-        </div>
-        <details style="margin-top:10px">
-          <summary>数据来源与导入信息</summary>
-          <dl class="kv" id="succ-source"></dl>
-        </details>
-        <div class="answer" id="succ-refresh-result" style="margin-top:12px" hidden></div>
+        <h2>数据概况</h2>
+        <dl class="kv" id="succ-source"></dl>
       </section>
 
       <section class="card" style="margin-top:16px">
@@ -101,9 +93,6 @@ export default {
     `;
 
     const sourceEl = root.querySelector("#succ-source");
-    const mdbEl = root.querySelector("#succ-mdb");
-    const staleEl = root.querySelector("#succ-stale");
-    const refreshResultEl = root.querySelector("#succ-refresh-result");
     const pairEl = root.querySelector("#succ-pair");
     const pairWarnEl = root.querySelector("#succ-pair-warn");
     const layoutEl = root.querySelector("#succ-layout-result");
@@ -123,11 +112,6 @@ export default {
       g3: root.querySelector("#succ-g3"),
       g4: root.querySelector("#succ-g4"),
     };
-
-    function setResult(text) {
-      refreshResultEl.textContent = text || "";
-      refreshResultEl.hidden = !text;
-    }
 
     const GRANDPARENT_KEYS = ["g1", "g2", "g3", "g4"];
 
@@ -188,14 +172,6 @@ export default {
 
     function renderSource() {
       const counts = status.counts || {};
-      mdbEl.textContent = status.mdb?.exists
-        ? `master.mdb ${status.mdb.size_mb} MB`
-        : "未找到 master.mdb";
-      // stale 是可以立刻处理的，留在外面；其余条数收进折叠区
-      staleEl.innerHTML = status.stale
-        ? '<span class="pill warn">master.mdb 已更新，可刷新</span>'
-        : "";
-      const catalog = status.catalog || null;
       const ranks = (status.ranks || [])
         .map((row) => `${escapeHtml(row.label)} ${escapeHtml(row.range)}`)
         .join(" · ");
@@ -204,10 +180,6 @@ export default {
           counts.charas || 0
         } 个</dd>
         <dt>等级区间</dt><dd>${ranks || "—"}</dd>
-        <dt>导入来源</dt><dd>${escapeHtml(catalog?.source || "未导入")}${
-          catalog ? ` · 导入于 ${escapeHtml(shortTime(catalog.imported_at))}` : ""
-        }</dd>
-        <dt>数据版本</dt><dd>${escapeHtml(status.data_version?.version || "未知")}</dd>
       `;
     }
 
@@ -330,25 +302,6 @@ export default {
     for (const key of ["target", "p1", "p2", ...GRANDPARENT_KEYS]) {
       selects[key].addEventListener("change", resetLayout);
     }
-    root.querySelector("#succ-refresh").addEventListener("click", async (event) => {
-      const button = event.currentTarget;
-      setResult("正在从 master.mdb 导入相性关系…");
-      button.disabled = true;
-      try {
-        const res = await api(`${API}/refresh?force=true`, { method: "POST" });
-        setResult(
-          res.imported
-            ? `已导入：关系组 ${res.summary.relations} 个 / 成员 ${res.summary.members} 条`
-            : res.reason || "本地已是最新",
-        );
-        await load();
-        await calcPair();
-      } catch (error) {
-        setResult(`导入失败：${error.message}`);
-      } finally {
-        button.disabled = false;
-      }
-    });
 
     try {
       await load();

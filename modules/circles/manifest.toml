@@ -3,7 +3,7 @@ id = "circles"
 name = "社团"
 version = "0.1.0"
 description = "实验性：读取 umamusume.space 的公开接口，看社团当月增粉与成员贡献占比（第三方玩家自采，非官方数据）"
-order = 75
+order = 70
 requires = []
 
 [api]

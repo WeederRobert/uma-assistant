@@ -49,12 +49,14 @@ def setup(ctx: ModuleContext) -> Module:
         on_startup=None,  # 可选：加载模型、预热缓存
         on_shutdown=None,  # 可选：释放资源
         status=service.stats,  # 可选：返回 dict，展示在 /api/system/modules
+        refresh=lambda: service.refresh(force=True),  # 可选：接到「概览 → 一键刷新」
     )
 ```
 
 - `setup` 抛异常 → 该模块标记 `status: "error"`，应用继续启动。
 - 路由自己声明 `tags`，不必再写 prefix（内核按 manifest 挂载）。
 - `status` 会在每次 `/api/system/modules` 时调用，必须轻量（只查计数，别全表扫描）。
+- `refresh` 是**无参可调用对象**，由 `POST /api/system/refresh` 统一调用（概览页的「一键刷新」）。需要强制回源的模块在闭包里带 `force=True`；返回值建议带 `summary` / `counts`，内核会压成一行显示。**不要在自己的面板里再放刷新按钮** —— 刷新入口只有概览页一个。
 
 ## ModuleContext
 
@@ -111,7 +113,9 @@ export default {
 - 面板样式复用 `static/styles.css` 的类与变量；不要引入构建工具或前端框架。
 - 不要假设面板只被挂载一次：同一页面可能被反复进入，状态要放在闭包里而非模块顶层。
 - 一个模块也可以**只占某个页面的一个标签**：页面由外壳的 `static/app.js` 的 `PAGE_TABS` 装配
-  （当前 `schedule` = `events` + `planner`），模块本身不用改，hash 形如 `#/schedule?tab=planner`。
+  （当前 `catalog` = 马娘 + 技能 + 协助卡，`schedule` = `events` + `planner`），hash 形如
+  `#/catalog?tab=skills`。标签定义支持 `key`（URL 里的名字，默认等于模块 id）与 `params`
+  （并进面板的 `ctx.params`，例如图鉴用 `kind=character` 区分马娘 / 协助卡），同一个模块可以占多个标签。
   想让面板进标签页而不是侧栏，直接往 `PAGE_TABS` 里加条目即可，不要从别的模块面板里 `import()` 它。
 - `/static/` 与 `/module-assets/` 带 `Cache-Control: no-store`，改完面板刷新页面即可生效，不需要清浏览器缓存。
 

@@ -75,13 +75,9 @@ export default {
       <p class="page-desc">条件表达式、效果参数、来源反查与进化关系全部来自本机 master.mdb。没有字典表的字段只回显原始编号 —— 宁可少给结论，也不猜含义。</p>
 
       <section class="card">
-        <h2>数据来源</h2>
-        <div class="toolbar">
-          <button class="ghost" id="skills-refresh">刷新技能数据</button>
-          <span class="hint" id="skills-refresh-hint"></span>
-        </div>
+        <h2>数据概况</h2>
         <dl class="kv" id="skills-source"></dl>
-        <div class="answer" id="skills-refresh-result" style="margin-top:12px" hidden></div>
+        <p class="hint" id="skills-note" hidden></p>
       </section>
 
       <section class="card" style="margin-top:16px">
@@ -104,8 +100,7 @@ export default {
     `;
 
     const sourceEl = root.querySelector("#skills-source");
-    const refreshHintEl = root.querySelector("#skills-refresh-hint");
-    const refreshResultEl = root.querySelector("#skills-refresh-result");
+    const noteEl = root.querySelector("#skills-note");
     const queryEl = root.querySelector("#skills-query");
     const categoryEl = root.querySelector("#skills-category");
     const rarityEl = root.querySelector("#skills-rarity");
@@ -117,16 +112,12 @@ export default {
     const detailEl = root.querySelector("#skills-detail");
 
     function setResult(text) {
-      refreshResultEl.textContent = text || "";
-      refreshResultEl.hidden = !text;
+      noteEl.textContent = text || "";
+      noteEl.hidden = !text;
     }
 
     function renderSource() {
       const counts = status.counts || {};
-      refreshHintEl.textContent = status.mdb?.exists
-        ? `master.mdb ${status.mdb.size_mb} MB`
-        : "未找到 master.mdb";
-      const catalog = status.catalog || null;
       sourceEl.innerHTML = `
         <dt>技能</dt><dd>${counts.skills || 0} 个 · 条件槽位 ${counts.slots || 0} 个 · 效果参数 ${
           counts.effects || 0
@@ -134,18 +125,12 @@ export default {
         <dt>来源反查</dt><dd>马娘 ${counts.characters || 0} 条 · 协助卡提示 ${
           counts.support_cards || 0
         } 条 · 进化 / 觉醒 ${counts.upgrades || 0} 条</dd>
-        <dt>导入来源</dt><dd>${escapeHtml(catalog?.source || "未导入")}${
-          catalog ? ` · 导入于 ${escapeHtml(shortTime(catalog.imported_at))}` : ""
-        }</dd>
-        <dt>数据版本</dt><dd>${escapeHtml(status.data_version?.version || "未知")}${
-          status.stale ? " · <span class=\"pill warn\">master.mdb 已更新，可刷新</span>" : ""
-        }</dd>
       `;
       if (!counts.skills) {
         setResult(
           status.mdb?.exists
-            ? "还没有技能数据，点「刷新技能数据」导入一次。"
-            : `没有找到 ${escapeHtml(status.mdb?.path || "master.mdb")}，先在「数据同步」里导入一次。`,
+            ? "还没有技能数据：在「概览」页点一次「一键刷新」。"
+            : `没有找到 ${escapeHtml(status.mdb?.path || "master.mdb")}，先在「概览」页导入一次。`,
         );
       }
     }
@@ -345,30 +330,6 @@ export default {
       }
     }
 
-    async function refresh() {
-      try {
-        setResult("正在从 master.mdb 导入技能数据…");
-        const result = await api(`${API}/refresh?force=true`, { method: "POST" });
-        if (result.imported) {
-          const summary = result.summary || {};
-          setResult(
-            `已导入：技能 ${summary.skills} 个 · 效果参数 ${summary.effects} 条 · 马娘来源 ${
-              summary.characters
-            } 条 · 协助卡来源 ${summary.support_cards} 条 · 进化 ${summary.upgrades} 条` +
-              (Object.keys(summary.skipped || {}).length
-                ? `（跳过：${Object.values(summary.skipped).join("；")}）`
-                : ""),
-          );
-        } else {
-          setResult(result.reason || "本地已是最新，未重复导入");
-        }
-        await loadStatus();
-        if (selected) await openDetail(selected.skill.skill_id);
-      } catch (error) {
-        setResult(`导入失败：${error.message}`);
-      }
-    }
-
     function onListClick(event) {
       const row = event.target.closest(".list-row.clickable");
       if (!row) return;
@@ -383,7 +344,6 @@ export default {
       openDetail(row.dataset.skill);
     }
 
-    root.querySelector("#skills-refresh").addEventListener("click", refresh);
     root.querySelector("#skills-search").addEventListener("click", search);
     queryEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {

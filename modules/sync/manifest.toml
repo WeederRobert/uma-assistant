@@ -3,7 +3,7 @@ id = "sync"
 name = "数据同步"
 version = "0.1.0"
 description = "从本机游戏客户端或手动选择的 master.mdb 更新结构化数据，并记录每次导入的版本快照；面板并入「概览」的数据版本卡，不进侧栏"
-order = 30
+order = 25
 requires = ["catalog"]
 
 [api]

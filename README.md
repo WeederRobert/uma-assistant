@@ -161,19 +161,20 @@ uma-assistant/
 | --- | --- | --- |
 | 开发计划 | 阶段划分、模块路线、技术债与风险；P0–P2 完成，P3 进行中（赛道 / 大赛 / 场地 / 技能已交付） | [ROADMAP.md](ROADMAP.md) |
 | Agent 定制 | `.github/instructions/` 存项目约定（模块七件套、数据口径、BOM 陷阱、验证流程），`.github/skills/` 放 4 个按需加载的 skill（需求拆解 / 新模块 / 数据源核实 / 交付验证） | [.github/](.github/) |
-| 界面约定 | 内容限宽 1180px、条目列表用 `.list.grid` 两到三列、长列表首屏 6–9 条 + 「展开其余 N 条」、长描述两行截断；侧栏底部可切换浅色 / 深色主题并记住选择 | [docs/architecture.md](docs/architecture.md) |
+| 界面约定 | 内容限宽 1180px、条目列表用 `.list.grid` 两到三列、长列表首屏 6–9 条 + 「展开其余 N 条」、长描述两行截断；多模块合成一页时用顶部标签栏（`PAGE_TABS`）；侧栏底部可切换浅色 / 深色主题并记住选择 | [docs/architecture.md](docs/architecture.md) |
 | 模块化 | 目录即模块，`manifest.toml` + `module.py: setup(ctx)`；单模块加载失败被隔离，不影响其它模块 | [docs/modules.md](docs/modules.md) |
 | 架构分层 | 内核（装配/存储/版本）与模块（业务）分离，模块之间不互相 import | [docs/architecture.md](docs/architecture.md) |
-| 数据版本 | `meta` 表存 `data.version`，侧栏徽标、`/api/system/info`、LLM 提示词都会带上 | [docs/architecture.md](docs/architecture.md) |
+| 数据版本 | `meta` 表存 `data.version`，侧栏徽标、`/api/system/info`、LLM 提示词都会带上。**只在概览页展示与刷新**，功能页不再重复显示版本块 | [docs/architecture.md](docs/architecture.md) |
 | 数据同步 | 客户端提取 / 文件上传 / sha256 幂等 / 每次导入写 `data/snapshots/<版本>.json`；面板内嵌在概览页的「数据版本」卡里，不进侧栏 | [docs/data-sync.md](docs/data-sync.md) |
-| 日程（简中服卡池 / 卡池与大赛排期） | BWiki SMW 只抓简中服两个卡池分类（服务器由分类决定），带来源等级与抓取时间；6h 缓存 + 强制刷新。卡池预告与大赛排期取 `master.mdb`，同页展示 | [docs/events.md](docs/events.md) |
+| 日程（简中服卡池 / 卡池与大赛排期） | BWiki SMW 只抓简中服两个卡池分类（服务器由分类决定），带来源等级与抓取时间；6h 缓存。卡池预告与大赛排期取 `master.mdb`，同页展示。数据统一在「概览」页一键刷新 | [docs/events.md](docs/events.md) |
 | 赛道 / 大赛 / 场地状态 | 赛事目录、大赛排期与场地状态出现率取 `master.mdb`（A 级），赛道几何取 BWiki 数据页（C 级）；几何统计口径、出现率口径与源数据缺陷单独说明 | [docs/races.md](docs/races.md) |
-| 技能 | 条件表达式、效果参数、马娘与协助卡反查、进化关系全部来自 `master.mdb`；没有字典表的枚举只回显原始编号，`skill_set` 这条退化的反查链路明确弃用 | [docs/skills.md](docs/skills.md) |
+| 技能 | 条件表达式、效果参数、马娘与协助卡反查、进化关系全部来自 `master.mdb`；没有字典表的枚举只回显原始编号，`skill_set` 这条退化的反查链路明确弃用。面板是「图鉴」页的「技能」标签 | [docs/skills.md](docs/skills.md) |
 | 图鉴详情 | `master.mdb` 的 `available_skill_set`（马娘技能组 + 解锁星级）、`support_card_limit`（各稀有度 0–4 突的等级上限）、`text_data` 151/154（效果类型名称与说明）、`support_card_effect_table`（各等级数值，折算成突破表）、`support_card_unique_effect` + `text_data` 155（固有加成与发动条件）、`single_mode_hint_gain`（提示技能） | [docs/catalog.md](docs/catalog.md) |
 | 相性 | `master.mdb` 的 `succession_relation` / `_member` / `_rank`（2133 组 / 4527 成员 / 3 档），两人点数与六人布局分数；明确不含适性（主数据无适性表） | [docs/succession.md](docs/succession.md) |
 | 社团粉丝（实验性） | 第三方站点 `umamusume.space` 的公开只读接口：社团当月增粉 + 逐成员贡献占比；数据由玩家自采、非官方，站点未收录的社团查不到，接口改版即失效 | [docs/circles.md](docs/circles.md) |
 | 卡池预告 | `master.mdb` 的 `gacha_data`／`text_data`／`gacha_available` 给出卡池排期与精选，含尚未开放的未来卡池（当期快照排到 2027-01-18），已用 BWiki 当期卡池交叉验证；面板并入「日程」页 | [docs/gacha.md](docs/gacha.md) |
 | 千里眼 / 萝卜规划 | mdb 已确认段（A 级：`gacha_data` 卡池 + `story_event_data` 剧情活动）+ BWiki `[[简中::未实装]]` 预测卡池（C 级）。简中服在加速、日服对不上轴，所以活动不换算，预测卡池用最近一次实测偏差平移并给出区间；天井萝卜 = `gacha_exchange.pay_item_num` × `cost_single`；收入由用户自填 | [docs/planner.md](docs/planner.md) |
+| 一键刷新（概览页） | `POST /api/system/refresh` 按模块顺序调用各自的 `refresh`：`sync` 先重导入 mdb（catalog_* 与数据版本），随后技能 / 相性 / 赛道 / 卡池 / 规划重读 mdb，`events`、`races`、`planner` 再抓 BWiki；单个模块失败只记在结果里 | [docs/architecture.md](docs/architecture.md) |
 | 日志 | 控制台 + `data/logs/app.log`，`RotatingFileHandler` 1 MB × 3 份；uvicorn 也走同一份配置 | — |
 | 打包发布 | PyInstaller 出**精简版**（44 MB，不含 ML 依赖）；`UMA_BUNDLE_ML=1` 出完整版；CI 在 `windows-latest` 上出包并跑启动冒烟 | [docs/packaging.md](docs/packaging.md) |
 | 运行时落点 | 源码运行写项目内 `data/`；打包后写 `%LOCALAPPDATA%\uma-assistant\data\`，只读资源走 `_MEIPASS`，业务代码只认 `Settings.data_dir` / `tmp_dir` | [docs/packaging.md](docs/packaging.md) |
@@ -186,12 +187,12 @@ uma-assistant/
 
 | 模块 | 作用 | API 前缀 |
 | --- | --- | --- |
-| `catalog` | 马娘 / 协助卡 / 技能的结构化查询，数据来自本地 `master.mdb`；详情带马娘的技能组（含解锁星级）、协助卡的**突破表**（0–4 突 × 练到该档上限后的数值）与**固有效果**（官方文案含条件型加成的发动条件、解锁档位）/ 提示技能 | `/api/catalog` |
+| `catalog` | 马娘 / 协助卡 / 技能的结构化查询，数据来自本地 `master.mdb`；详情带马娘的技能组（含解锁星级）、协助卡的**突破表**（0–4 突 × 练到该档上限后的数值）与**固有效果**（官方文案含条件型加成的发动条件、解锁档位）/ 提示技能。**面板是「图鉴」页的「马娘」与「协助卡」两个标签** | `/api/catalog` |
 | `knowledge` | 导入 Markdown/PDF/TXT 建立向量库；回答时**先用本地模块接口查结构化数据**（赛道 / 大赛 / 技能 / 卡池 / 图鉴），命中就以查库结果为准并标注来源接口与数据版本，没命中才回落文档检索 | `/api/knowledge` |
 | `sync` | 从本机客户端或选定的 `master.mdb` 更新数据，按 sha256 幂等，并记录版本快照 | `/api/sync` |
 | `events` | 从 BWiki 抓取**简中服**卡池（只看简中，不跟踪繁中 / 日服），看日程与变更审计；**日程总页**同时展示 `gacha` 的卡池排期与 `races` 的大赛排期，并与 `planner` 同页（顶部标签栏切换「日程」/「规划」） | `/api/events` |
 | `races` | 赛事目录 / 大赛排期 / 场地状态（`master.mdb`）+ 赛道几何（BWiki），查分段、坡道、终直、轮次窗口与晋级门槛 | `/api/races` |
-| `skills` | 技能条件、效果参数、来源反查（哪些马娘 / 哪些协助卡给）与进化关系，全部来自 `master.mdb`，解析不了的字段回显原始值 | `/api/skills` |
+| `skills` | 技能条件、效果参数、来源反查（哪些马娘 / 哪些协助卡给）与进化关系，全部来自 `master.mdb`，解析不了的字段回显原始值；**面板是「图鉴」页的「技能」标签** | `/api/skills` |
 | `succession` | 相性：两只马娘的共享关系组与点数、六人继承布局总分与等级，数据来自 `master.mdb` 的 `succession_relation*`；不含适性 | `/api/succession` |
 | `circles` | **实验性**：读第三方站点 `umamusume.space` 的公开接口，看社团当月增粉与逐成员贡献占比；数据由玩家自采、非官方，站点未收录的社团查不到 | `/api/circles` |
 | `gacha` | 卡池排期与精选卡片，来自 `master.mdb`（含未来卡池，可提前预告下一期）；**面板并入「日程」页**，本模块只提供接口 | `/api/gacha` |

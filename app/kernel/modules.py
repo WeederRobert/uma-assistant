@@ -74,6 +74,9 @@ class Module:
     on_startup: Callable[[], None] | None = None
     on_shutdown: Callable[[], None] | None = None
     status: Callable[[], dict[str, Any]] | None = None
+    # 一次「刷新这模块的数据」的入口，供 /api/system/refresh 汇总调用；
+    # 需要强制回源的模块在这里自己带上 force，调用方不用关心参数
+    refresh: Callable[[], dict[str, Any]] | None = None
 
 
 @dataclass(slots=True)
@@ -228,6 +231,7 @@ class ModuleRegistry:
                 "name": manifest.name,
                 "version": manifest.version,
                 "description": manifest.description,
+                "order": manifest.order,
                 "status": "ok" if loaded.ok else "error",
                 "error": loaded.error,
                 "api": manifest.api_prefix,

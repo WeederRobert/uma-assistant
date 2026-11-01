@@ -72,7 +72,15 @@ flowchart TD
 
 模块之间不互 import，跨模块展示走 HTTP：`events`（日程总页）的面板会调 `/api/gacha/banners` 与 `/api/races/champions` 渲染卡池与大赛排期，任一接口不可用时那张卡降级成一行提示。`requires` 只用于保证加载顺序，不传递 Python 依赖。
 
-**一页多标签**由前端壳（`static/app.js` 的 `PAGE_TABS`）装配，不让模块互相引用面板：一个页面 = 一个侧栏入口 + 顶部标签栏，每个标签挂一个模块的 `panel.js`，hash 形如 `#/schedule?tab=planner`。旧地址 `#/planner`、`#/events` 会被改写成对应标签，避免两套入口。当前只有「日程」页用了这个机制（`events` + `planner`）。
+**一页多标签**由前端壳（`static/app.js` 的 `PAGE_TABS`）装配，不让模块互相引用面板：一个页面 = 一个侧栏入口 + 顶部标签栏，每个标签挂一个模块的 `panel.js`。
+
+- `tab.key` 是标签在 URL 里的名字（默认与模块 id 相同），`tab.params` 会并进面板的 `ctx.params`；
+  同一个模块可以占多个标签（「图鉴」的马娘 / 协助卡都是 `catalog` 面板，靠 `kind` 参数区分）。
+- hash 形如 `#/schedule?tab=planner`、`#/catalog?tab=skills`；旧地址 `#/catalog`、`#/skills`、`#/events`、
+  `#/planner` 会被改写成对应标签，避免两套入口。
+- 当前两个合并页：「图鉴」= `catalog`（马娘）+ `skills`（技能）+ `catalog`（协助卡）；「日程」= `events` + `planner`。
+
+**侧栏顺序**由 manifest 的 `order` 决定（`/api/system/info` 里带 `order`），合并页取标签模块里最小的 `order`。当前顺序：概览 → 知识库 → 图鉴 → 赛道 → 相性 → 日程 → 社团；要调顺序改 manifest 的 `order`，不要在 `app.js` 里写死名单。
 
 ## 启动流程
 
@@ -117,6 +125,15 @@ sequenceDiagram
 - 未导入时 `known=False`、`version="unknown"`，UI 显示"未导入数据"而不是假装有数据。
 - 数据集与游戏版本分开记录：同一版客户端可能对应多次数据修正。
 
+## 一键刷新
+
+数据版本与来源只在**概览页**展示，刷新也只在那里执行：各功能页（日程 / 赛道 / 技能 / 相性 / 图鉴 / 规划）不再各放一套「刷新 X 数据」按钮与版本 dl。
+
+- 模块级钩子：`Module.refresh` 是一个无参可调用对象，模块自己决定刷新什么（重读 mdb / 抓 BWiki），需要强制回源的模块在闭包里带 `force=True`，调用方不用关心参数。
+- 路由：`POST /api/system/refresh` 按注册顺序逐个调用，`sync` 先跑（它负责 mdb → `catalog_*` 与 `data.version`），单个模块抛错只记进 `results[].error`，不影响其余模块。
+- 返回：`results[]`（`id` / `name` / `ok` / `duration_ms` / `summary` / `error`）+ 刷新后的 `data`。`summary` 由内核把各模块返回的 `summary` / `counts` / `totals` / `catalog` 压成一行（键名有中文映射表）。
+- 前端：概览页的「一键刷新」按钮逐行显示每个模块的耗时与摘要，完成后刷新版本徽标与「数据版本」卡。
+
 ## 存储
 
 | 位置 | 用途 |
@@ -146,7 +163,8 @@ sequenceDiagram
 | 长文本 | 描述类文本加 `class="meta clamp"`（两行截断），完整内容进详情或 `title` |
 | 长明细折叠 | 来源清单这类次要信息放进 `<details>`，默认收起，`summary` 写「展开来源明细（2 条 …）」 |
 | 不换行的角标 | 状态 pill、编号、时间加 `nowrap`；网格内的 nowrap 会自动放开，避免撑出横向滚动条 |
-| 按钮只有三档 | ①默认（描边次要动作：刷新 / 重置 / 清空 / 关闭 / 删除）；②`class="primary"`（主操作：查询 / 计算 / 导入 / 提问 / 检查，一屏里每张卡最多一个）；③胶囊形轻量操作（`.more-btn` 展开更多、`.chip` 切换、`button.tag` 卡池 `+N`）。**不要再写裸 `<button>` 以外的样式** —— `styles.css` 的 `button` 基础规则保证新按钮自动统一（8px 圆角 / 8×16 内边距 / 13px / 一致的 hover 与 disabled） |
+| 按钮只有三档 | ①默认（描边次要动作：重置 / 清空 / 关闭 / 删除）；②`class="primary"`（主操作：查询 / 计算 / 导入 / 提问 / 检查 / 一键刷新，一屏里每张卡最多一个）；③胶囊形轻量操作（`.more-btn` 展开更多、`.chip` 切换、`button.tag` 卡池 `+N`）。**不要再写裸 `<button>` 以外的样式** —— `styles.css` 的 `button` 基础规则保证新按钮自动统一（8px 圆角 / 8×16 内边距 / 13px / 一致的 hover 与 disabled） |
+| 刷新只在概览页 | 功能页不放「刷新 X 数据」按钮，也不重复展示 mdb / BWiki 的版本与来源；模块提供 `Module.refresh` 钩子，概览页的「一键刷新」统一调用（见「一键刷新」一节） |
 
 校验方式：`document.querySelector(".main-scroll").scrollWidth === clientWidth`（不应出现横向滚动条）。
 

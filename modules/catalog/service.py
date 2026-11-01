@@ -88,6 +88,22 @@ class CatalogService:
             item.pop("_rank", None)
         return results[:limit]
 
+    def list_kind(self, kind: str, limit: int = 30) -> list[dict]:
+        """没有关键词时的浏览：按名字排序列出某一类的前 N 条。
+
+        「图鉴」页的马娘 / 协助卡是独立标签页，标签本身已经限定了类型，
+        所以这里不需要关键词，直接给一页列表用于点进详情。
+        """
+        if kind not in _TABLE:
+            raise ValueError(f"未知类型：{kind}")
+        table, id_column = _TABLE[kind]
+        limit = max(1, min(limit, 100))
+        rows = self.db.query(f"SELECT * FROM {table} ORDER BY name LIMIT ?", (limit,))
+        items = [self._normalize(kind, id_column, row) for row in rows]
+        for item in items:
+            item.pop("_rank", None)
+        return items
+
     def _search_kind(self, kind: str, query: str, limit: int) -> list[dict]:
         table, id_column = _TABLE[kind]
         pattern = f"%{query}%"

@@ -74,27 +74,13 @@ export default {
   async mount(root, ctx) {
     const { api, escapeHtml, toast, createLimiter } = ctx;
     const limiter = createLimiter(6);
-    let status = null;
     let schedule = null;
     let history = null;
-    let refreshing = false;
 
     root.innerHTML = `
       <h1 class="page-title">日程</h1>
-      <p class="page-desc">一页看完所有时间相关的东西：<strong>卡池</strong>与<strong>大赛</strong>排期来自本机 master.mdb（客户端内置，含未来排期），<strong>简中服已开始的卡池</strong>来自 BWiki 分类页（带来源链接与抓取时间）。只跟简中服，不跟踪繁中服与日服。所有时间按系统时区显示。</p>
+      <p class="page-desc">一页看完所有时间相关的东西：<strong>卡池</strong>与<strong>大赛</strong>排期来自本机 master.mdb（客户端内置，含未来排期），<strong>简中服已开始的卡池</strong>来自 BWiki 分类页。只跟简中服，不跟踪繁中服与日服。所有时间按系统时区显示；数据在「概览」页一键刷新。</p>
       <section class="card">
-        <h2>数据来源</h2>
-        <div class="toolbar" style="margin-bottom:8px">
-          <button class="ghost" id="events-refresh">刷新 BWiki</button>
-          <span class="hint" id="events-last"></span>
-        </div>
-        <details id="events-sources-details">
-          <summary class="hint" id="events-sources-summary">展开来源明细</summary>
-          <div class="list" id="events-sources" style="margin-top:8px"></div>
-        </details>
-        <div class="answer" id="events-refresh-result" style="margin-top:12px">还没有抓取过。</div>
-      </section>
-      <section class="card" style="margin-top:16px">
         <h2>近期提醒</h2>
         <p class="hint" style="margin-top:0">按系统时区算：<strong>即将开始</strong>是未来开始的条目，<strong>即将结束</strong>是剩余天数不超过阈值的进行中条目。BWiki 的分类页只收录已经开始的卡池，所以「即将开始」经常是空的 —— 那就看「即将结束」，它才是接下来会变的东西。</p>
         <div id="events-near"></div>
@@ -103,7 +89,6 @@ export default {
         <h2>卡池（master.mdb 排期）</h2>
         <p class="hint" style="margin-top:0">来自客户端内置排期，含还没开放的未来卡池，所以能提前看到下一期精选；实际开放时间以游戏内公告为准。BWiki 抓到的简中服已开始卡池仍在下方时间轴。</p>
         <div class="toolbar">
-          <button class="ghost" id="gacha-refresh">刷新卡池排期</button>
           <label><input id="gacha-ended" type="checkbox" /> 显示最近已结束</label>
           <span class="hint" id="gacha-hint"></span>
         </div>
@@ -137,11 +122,6 @@ export default {
       </section>
     `;
 
-    const refreshButton = root.querySelector("#events-refresh");
-    const lastEl = root.querySelector("#events-last");
-    const sourcesEl = root.querySelector("#events-sources");
-    const sourcesSummaryEl = root.querySelector("#events-sources-summary");
-    const resultEl = root.querySelector("#events-refresh-result");
     const windowEl = root.querySelector("#events-window");
     const timelineEl = root.querySelector("#events-timeline");
     const nearEl = root.querySelector("#events-near");
@@ -150,7 +130,6 @@ export default {
     const gachaBodyEl = root.querySelector("#gacha-body");
     const gachaHintEl = root.querySelector("#gacha-hint");
     const gachaEndedEl = root.querySelector("#gacha-ended");
-    const gachaRefreshButton = root.querySelector("#gacha-refresh");
     const championsEl = root.querySelector("#champions-list");
     const championsHintEl = root.querySelector("#champions-hint");
     const championsUpcomingEl = root.querySelector("#champions-upcoming");
@@ -165,53 +144,6 @@ export default {
       if (placeholdersEl.checked) params.set("include_placeholders", "true");
       const query = params.toString();
       return query ? `${API}/schedule?${query}` : `${API}/schedule`;
-    }
-
-    function renderStatus() {
-      lastEl.textContent = status?.last_refresh
-        ? `上次刷新 ${shortTime(status.last_refresh)}`
-        : "还没有刷新过";
-      const items = status?.items || {};
-      const byKind = items.by_kind || {};
-      const sources = status?.sources || [];
-      sourcesSummaryEl.textContent = `展开来源明细（${sources.length} 条 · 简中服卡池）`;
-      sourcesEl.innerHTML = sources
-        .map((source) => {
-          const lastFetch = (status.last_fetches || []).find((row) => row.source_key === source.key);
-          const detail = lastFetch
-            ? `${shortTime(lastFetch.finished_at || lastFetch.started_at)} · 条目 ${lastFetch.items}` +
-              (lastFetch.error ? ` · 失败：${lastFetch.error}` : "") +
-              (lastFetch.stale ? " · 使用缓存" : "")
-            : "未抓取";
-          return `
-            <div class="list-row">
-              <div>
-                <div class="name">${escapeHtml(source.label)}
-                  <span class="tag server-${escapeHtml(source.server)}">${escapeHtml(
-                    source.server_label,
-                  )}</span>
-                  <span class="tag level-${String(source.source_level).toLowerCase()}">${escapeHtml(
-                    source.source_level,
-                  )} 级</span>
-                  ${source.enabled ? "" : `<span class="tag level-d">未启用</span>`}
-                </div>
-                <div class="meta">分类:${escapeHtml(source.category)} · ${escapeHtml(detail)}</div>
-              </div>
-              <span class="pill ${lastFetch?.error ? "error" : "ok"}">${source.items}</span>
-            </div>`;
-        })
-        .join("");
-      if (!sourcesEl.innerHTML) {
-        sourcesEl.innerHTML = `<div class="empty">没有配置来源</div>`;
-      }
-      if (!items.total) {
-        resultEl.textContent = "还没有数据，点「刷新 BWiki」抓取一次。";
-      } else {
-        const parts = [];
-        if (byKind.pool) parts.push(`卡池 ${byKind.pool}`);
-        if (byKind.event) parts.push(`活动 ${byKind.event}`);
-        resultEl.textContent = `库里共 ${items.total} 条${parts.length ? `：${parts.join(" · ")}` : ""}。`;
-      }
     }
 
     function row(item) {
@@ -281,9 +213,9 @@ export default {
           } · 已结束 ${counts.ended || 0} · 今天/本周开始 ${counts.today || 0}/${
             counts.this_week || 0
           }${hidden ? ` · 已隐藏占位 ${hidden}` : ""}`
-        : "还没有抓到卡池，先点上面的「刷新 BWiki」。";
+        : "还没有抓到卡池：在「概览」页点一次「一键刷新」。";
       if (!items.length) {
-        timelineEl.innerHTML = `<div class="empty">先在上面的「数据来源」里点一次刷新。</div>`;
+        timelineEl.innerHTML = `<div class="empty">库里还没有卡池：在「概览」页点一次「一键刷新」。</div>`;
         return;
       }
       const groups = [
@@ -349,7 +281,7 @@ export default {
       const ending = near.ending_soon || [];
       const upcomingBlock = upcoming.length
         ? `<div class="list">${upcoming.map((item) => nearRow(item, "upcoming")).join("")}</div>`
-        : `<div class="empty">库里没有未来开始的条目：BWiki 分类页只收录已经开始的卡池，下一期要等页面更新后再刷新。未来卡池见下方「卡池」卡（读 master.mdb 的内置排期）。</div>`;
+        : `<div class="empty">库里没有未来开始的条目：BWiki 分类页只收录已经开始的卡池，下一期要等页面更新后（在「概览」页一键刷新）再看。未来卡池见下方「卡池」卡（读 master.mdb 的内置排期）。</div>`;
       const endingBlock = ending.length
         ? `<div class="list">${ending.map((item) => nearRow(item, "ending")).join("")}</div>`
         : `<div class="empty">${near.horizon_days} 天内没有条目结束。</div>`;
@@ -644,37 +576,12 @@ export default {
         .join("")}${limiter.more("chg", rows.length)}`;
     }
 
-    function renderRefreshResult(result) {
-      if (!result) return;
-      const totals = result.totals || {};
-      const lines = [
-        `新增 ${totals.added || 0} · 变更 ${totals.changed || 0} · 移除 ${totals.removed || 0}`,
-      ];
-      (result.results || []).forEach((row) => {
-        if (row.ok) {
-          lines.push(
-            `${row.label}：${row.items} 条（新增 ${row.added} / 变更 ${row.changed} / 移除 ${row.removed}）${
-              row.cached ? " · 304 复用缓存" : ""
-            }${row.stale ? " · 抓取失败，用缓存" : ""}`,
-          );
-        } else {
-          lines.push(`${row.label}：失败 — ${row.error}`);
-        }
-      });
-      (result.results || [])
-        .filter((row) => row.note)
-        .forEach((row) => lines.push(`· ${row.note}`));
-      resultEl.textContent = lines.join("\n");
-    }
-
     async function loadSchedule() {
       schedule = await api(scheduleUrl());
       renderSchedule();
     }
 
     async function load() {
-      status = await api(`${API}/status`);
-      renderStatus();
       history = await api(`${API}/history?limit=50`);
       renderChanges();
       await loadSchedule();
@@ -687,37 +594,6 @@ export default {
         await loadSchedule();
       } catch (error) {
         windowEl.textContent = `加载失败：${error.message}`;
-      }
-    });
-
-    refreshButton.addEventListener("click", async () => {
-      if (refreshing) return;
-      refreshing = true;
-      refreshButton.disabled = true;
-      refreshButton.textContent = "抓取中…";
-      resultEl.textContent = `正在按 ${status?.interval_seconds ?? 1.5} 秒间隔依次抓取，请稍候。`;
-      try {
-        const result = await api(`${API}/refresh`, {
-          method: "POST",
-          body: JSON.stringify({ sources: null, force: true }),
-        });
-        // 先重载页面数据，再写刷新摘要——renderStatus 会重置这段提示文案
-        await load();
-        renderRefreshResult(result);
-        const totals = result.totals || {};
-        toast(
-          `刷新完成：新增 ${totals.added || 0} · 变更 ${totals.changed || 0} · 移除 ${
-            totals.removed || 0
-          }`,
-          result.ok ? "info" : "error",
-        );
-      } catch (error) {
-        resultEl.textContent = `刷新失败：${error.message}`;
-        toast(error.message, "error");
-      } finally {
-        refreshing = false;
-        refreshButton.disabled = false;
-        refreshButton.textContent = "刷新 BWiki";
       }
     });
 
@@ -744,29 +620,6 @@ export default {
       else if (key === "chg") renderChanges();
     });
 
-    gachaRefreshButton.addEventListener("click", async () => {
-      gachaRefreshButton.disabled = true;
-      gachaHintEl.textContent = "正在从 master.mdb 导入卡池排期…";
-      try {
-        const result = await api(`${GACHA_API}/refresh?force=true`, { method: "POST" });
-        if (result.imported) {
-          const summary = result.summary || {};
-          toast(
-            `卡池排期已导入：${summary.banners} 个（未来 ${summary.upcoming} 个）`,
-            "info",
-          );
-        } else {
-          toast(result.reason || "本地已是最新", "info");
-        }
-        await loadGacha();
-      } catch (error) {
-        gachaHintEl.textContent = `导入失败：${error.message}`;
-        toast(error.message, "error");
-      } finally {
-        gachaRefreshButton.disabled = false;
-      }
-    });
-
     championsEl.addEventListener("click", (event) => {
       const row = event.target.closest("[data-champion]");
       if (row) openChampion(row.dataset.champion);
@@ -788,7 +641,7 @@ export default {
     try {
       await load();
     } catch (error) {
-      resultEl.textContent = `加载失败：${error.message}`;
+      windowEl.textContent = `加载失败：${error.message}`;
     }
   },
 };
