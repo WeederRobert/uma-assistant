@@ -109,19 +109,50 @@ function renderVersionBadge() {
     : "运行 scripts/import_master_mdb.py 导入国服 master.mdb 后显示版本";
 }
 
+// 一页多标签：一个页面里放多个模块的面板，用顶部标签栏切换，侧栏只出现页面本身。
+// 键是页面 id（出现在 hash 里），tabs 里是模块 id 与标签文字。
+const PAGE_TABS = {
+  schedule: {
+    label: "日程",
+    tabs: [
+      { id: "events", label: "日程" },
+      { id: "planner", label: "千里眼 · 规划" },
+    ],
+  },
+};
+
+function pageOfModule(moduleId) {
+  return Object.keys(PAGE_TABS).find((key) =>
+    PAGE_TABS[key].tabs.some((tab) => tab.id === moduleId),
+  );
+}
+
+function moduleStatus(moduleId) {
+  return state.modules.find((module) => module.id === moduleId)?.status || "error";
+}
+
+function tabsPageStatus(page) {
+  return page.tabs.some((tab) => moduleStatus(tab.id) === "ok") ? "ok" : "error";
+}
+
 function renderSidebar() {
-  const items = [
-    { id: "overview", label: "概览", status: "ok" },
-    // 只把带面板且没标 hidden 的模块放侧栏：没有 [ui] 的（如 gacha）只提供接口，
-    // hidden 的（如数据同步）面板内嵌在概览页
+  const items = [{ id: "overview", label: "概览", status: "ok" }];
+  // 合并页排在概览之后，按 PAGE_TABS 的顺序
+  for (const [pageId, page] of Object.entries(PAGE_TABS)) {
+    items.push({ id: pageId, label: page.label, status: tabsPageStatus(page) });
+  }
+  // 其余模块仍按 manifest：没有 [ui] 的（如 gacha）只提供接口，hidden 的（如数据同步）
+  // 面板内嵌在概览页；已并进标签页的模块不再单独出现
+  items.push(
     ...state.modules
       .filter((module) => module.ui?.panel && !module.ui?.hidden)
+      .filter((module) => !pageOfModule(module.id))
       .map((m) => ({
         id: m.id,
         label: m.ui?.label || m.name,
         status: m.status,
       })),
-  ];
+  );
   nav.innerHTML = items
     .map(
       (item) => `
@@ -315,29 +346,66 @@ function panelContext(extra = {}) {
   };
 }
 
-async function renderModule(moduleId) {
+async function mountModulePanel(host, moduleId) {
   const meta = state.modules.find((m) => m.id === moduleId);
   if (!meta) {
-    view.innerHTML = `<div class="empty">模块不存在：${escapeHtml(moduleId)}</div>`;
+    host.innerHTML = `<div class="empty">模块不存在：${escapeHtml(moduleId)}</div>`;
     return;
   }
   if (meta.status !== "ok" || !meta.ui?.panel) {
-    view.innerHTML = `
+    host.innerHTML = `
       <h1 class="page-title">${escapeHtml(meta.name)}</h1>
       <div class="empty">
         ${meta.error ? escapeHtml(meta.error) : "该模块没有提供界面，可直接调用接口。"}
       </div>`;
     return;
   }
-
   const panel = await loadPanel(meta);
-  view.innerHTML = "";
+  host.innerHTML = "";
   const root = document.createElement("div");
-  view.appendChild(root);
+  host.appendChild(root);
   const result = await panel.mount(root, panelContext());
   if (typeof result === "function") {
     state.cleanups.push(result);
   }
+}
+
+async function renderModule(moduleId) {
+  view.innerHTML = "";
+  const host = document.createElement("div");
+  view.appendChild(host);
+  await mountModulePanel(host, moduleId);
+}
+
+// 合并页：顶部标签栏 + 当前标签对应的模块面板。面板自己渲染标题与卡片，
+// 所以这里只负责标签栏，不再叠加一层页面标题（避免出现两个 h1）。
+async function renderTabsPage(pageKey, requestedTab) {
+  const page = PAGE_TABS[pageKey];
+  const activeId = page.tabs.some((tab) => tab.id === requestedTab)
+    ? requestedTab
+    : page.tabs[0].id;
+  view.innerHTML = "";
+
+  const bar = document.createElement("div");
+  bar.className = "page-tabs";
+  bar.setAttribute("role", "tablist");
+  bar.innerHTML = page.tabs
+    .map(
+      (tab) => `<button type="button" role="tab" class="page-tab" aria-selected="${
+        tab.id === activeId
+      }" data-tab="${escapeHtml(tab.id)}">${escapeHtml(tab.label)}</button>`,
+    )
+    .join("");
+  const host = document.createElement("div");
+  view.append(bar, host);
+
+  bar.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-tab]");
+    if (!button || button.dataset.tab === activeId) return;
+    location.hash = `#/${pageKey}?tab=${button.dataset.tab}`;
+  });
+
+  await mountModulePanel(host, activeId);
 }
 
 async function route() {
@@ -345,12 +413,24 @@ async function route() {
   const raw = location.hash.replace(/^#\/?/, "") || "overview";
   // 支持 #/skills?skill=200462 这种带参数的入口（面板用 ctx.params 读）
   const [requested, query = ""] = raw.split("?");
-  state.activeId = requested;
-  state.params = new URLSearchParams(query);
+  const params = new URLSearchParams(query);
+
+  // 模块被并进标签页后，旧地址（#/events、#/planner）改写成该页的标签，避免两套入口
+  const ownerPage = PAGE_TABS[requested] ? null : pageOfModule(requested);
+  if (ownerPage) {
+    params.set("tab", requested);
+    history.replaceState(null, "", `#/${ownerPage}?${params.toString()}`);
+  }
+  const pageKey = ownerPage || (PAGE_TABS[requested] ? requested : null);
+
+  state.params = params;
+  state.activeId = pageKey || requested;
   renderSidebar();
   try {
     if (requested === "overview") {
       await renderOverview();
+    } else if (pageKey) {
+      await renderTabsPage(pageKey, params.get("tab"));
     } else {
       await renderModule(requested);
     }

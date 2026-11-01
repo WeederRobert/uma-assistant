@@ -276,6 +276,35 @@ body {
   color: var(--text-dim);
 }
 
+/* 一页多标签（PAGE_TABS）：顶部标签栏，用来在同一个页面里切换多个模块面板 */
+.page-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 9px 14px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.page-tab:hover:not(:disabled) {
+  color: var(--text);
+  border-bottom-color: var(--border);
+}
+
+.page-tab[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--blue);
+  font-weight: 600;
+}
+
 .grid {
   display: grid;
   gap: 16px;

@@ -38,6 +38,7 @@
 | 相性查询（两人关系组点数 + 六人继承布局） | `modules/succession/` | `tests/test_succession.py`（13 例）；真实库 2133 关系组 / 4527 成员 / 95 角色；特别周 × 无声铃鹿 = 27 分 △、六人布局示例 91 分 〇 | ✅ 2026-10-28 |
 | 社团粉丝（**实验性**）：社团当月增粉 + 逐成员贡献占比 | `modules/circles/` | `tests/test_circles.py`（10 例）；真实拉取 159 个社团，颂乐人偶 30 人合计 158.72 亿 vs 榜单 158.73 亿（差 0.0x%）；面板实测搜索 / 展开成员 / 缓存命中 | ✅ 2026-11-01（已并入 main） |
 | **千里眼 + 萝卜规划**（近半年卡池 / 剧情活动预测 + 够不够抽） | `modules/planner/` | `tests/test_planner.py`（17 例）；真实数据：mdb 已确认 42 池 + 33 期剧情活动（卡池到 2027-01-26、活动到 2026-12-26）、wiki 预测 118 条 / 重叠 20 条；偏差实测 6 组配对 +35~+55 天（按最近一次 +55 天平移）；浏览器实测勾选 / 试算 / 保存方案 | ✅ 2026-11-01 |
+| **日程与规划合并为「日程」页**（顶部标签栏切换 `events` / `planner`，旧地址 `#/events`、`#/planner` 自动改写） | `static/app.js`（`PAGE_TABS`）、`static/styles.css` | 浏览器实测：侧栏只剩一个「日程」入口、标签互切不重复请求、`#/planner` 跳转到 `?tab=planner`、无横向滚动 | ✅ 2026-11-01 |
 | 赛道几何「切线」口径（首段未列出的开场直线） | `modules/races/geometry.py` | 107 条几何中 12 条带切线，`opening_straight` 入库；`tests/test_races.py` 断言 |
 | 赛事目录与赛道几何（mdb 赛事 1525 场 + BWiki 赛道 107 条分段 / 坡道） | `modules/races/` | `tests/test_races.py`（24 例）；真实刷新 `races=1525 / courses=121 / geometry=107`，4 条源数据缺陷出告警；6 条示例赛道与知识库一致 | ✅ |
 | 知识库素材重复导入的覆盖语义 | `scripts/import_kb.py` | 同名素材内容变化时先删旧版本再导入（`--keep-stale` 可关闭） | ✅ |

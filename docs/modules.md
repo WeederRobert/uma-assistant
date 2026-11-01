@@ -110,6 +110,9 @@ export default {
 - `ctx.refreshInfo()`：重新拉取 `/api/system/info`，刷新侧栏版本徽标与 `ctx.state`。面板改了数据版本（如导入 mdb）后必须调用，否则徽标会停在旧值。
 - 面板样式复用 `static/styles.css` 的类与变量；不要引入构建工具或前端框架。
 - 不要假设面板只被挂载一次：同一页面可能被反复进入，状态要放在闭包里而非模块顶层。
+- 一个模块也可以**只占某个页面的一个标签**：页面由外壳的 `static/app.js` 的 `PAGE_TABS` 装配
+  （当前 `schedule` = `events` + `planner`），模块本身不用改，hash 形如 `#/schedule?tab=planner`。
+  想让面板进标签页而不是侧栏，直接往 `PAGE_TABS` 里加条目即可，不要从别的模块面板里 `import()` 它。
 - `/static/` 与 `/module-assets/` 带 `Cache-Control: no-store`，改完面板刷新页面即可生效，不需要清浏览器缓存。
 
 ## 生命周期顺序

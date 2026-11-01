@@ -72,6 +72,8 @@ flowchart TD
 
 模块之间不互 import，跨模块展示走 HTTP：`events`（日程总页）的面板会调 `/api/gacha/banners` 与 `/api/races/champions` 渲染卡池与大赛排期，任一接口不可用时那张卡降级成一行提示。`requires` 只用于保证加载顺序，不传递 Python 依赖。
 
+**一页多标签**由前端壳（`static/app.js` 的 `PAGE_TABS`）装配，不让模块互相引用面板：一个页面 = 一个侧栏入口 + 顶部标签栏，每个标签挂一个模块的 `panel.js`，hash 形如 `#/schedule?tab=planner`。旧地址 `#/planner`、`#/events` 会被改写成对应标签，避免两套入口。当前只有「日程」页用了这个机制（`events` + `planner`）。
+
 ## 启动流程
 
 1. `python -m app.desktop` 探测可用端口（默认 8737，被占用则顺延）。
