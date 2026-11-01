@@ -86,9 +86,7 @@ def replace_members(
     with db.transaction() as conn:
         conn.execute("DELETE FROM circles_members WHERE circle_id = ?", (circle_id,))
         if values:
-            conn.executemany(
-                f"INSERT INTO circles_members ({columns}) VALUES ({markers})", values
-            )
+            conn.executemany(f"INSERT INTO circles_members ({columns}) VALUES ({markers})", values)
 
 
 def list_circles(

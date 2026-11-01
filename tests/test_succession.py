@@ -234,9 +234,7 @@ def test_layout_rejects_duplicate_grandparents(service: SuccessionService, mdb: 
     import_catalog(service.db, mdb)
 
     with pytest.raises(ValueError) as excinfo:
-        service.layout(
-            {"target": 1001, "parents": [1002, 1003], "grandparents": [1004, 1004]}
-        )
+        service.layout({"target": 1001, "parents": [1002, 1003], "grandparents": [1004, 1004]})
 
     assert "祖父母不能重复" in str(excinfo.value)
     assert "丸善斯基" in str(excinfo.value)
