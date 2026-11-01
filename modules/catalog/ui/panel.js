@@ -133,9 +133,12 @@ export default {
     const limiter = createLimiter(9);
     let lastItems = [];
     let stats = null;
+    // 「图鉴」页按标签页限定了类型（马娘 / 协助卡），面板从 hash 里读出来就把筛选锁死
+    const lockedKind = (ctx?.params?.get("kind") || "").trim();
+    const lockedLabel = { character: "马娘", support_card: "协助卡" }[lockedKind] || "";
 
     root.innerHTML = `
-      <h1 class="page-title">图鉴查询</h1>
+      <h1 class="page-title">${lockedLabel ? `图鉴 · ${lockedLabel}` : "图鉴查询"}</h1>
       <p class="page-desc">数据来自国服 master.mdb 的本地快照。点击任意一条查看完整描述、天赋加成与数据版本。</p>
       <div class="grid">
         <section class="card">
@@ -175,6 +178,21 @@ export default {
     const dialogKind = root.querySelector("#cat-dialog-kind");
     const dialogBody = root.querySelector("#cat-dialog-body");
     const dialogFoot = root.querySelector("#cat-dialog-foot");
+
+    if (lockedKind) {
+      kindEl.value = lockedKind;
+      kindEl.hidden = true;
+      queryEl.placeholder = `在${lockedLabel}里搜索名字`;
+    }
+
+    async function loadList() {
+      try {
+        const result = await api(`${API}/list?kind=${encodeURIComponent(lockedKind)}&limit=30`);
+        renderItems(result.items || []);
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    }
 
     async function loadStats() {
       stats = await api(`${API}/stats`);
@@ -290,8 +308,12 @@ export default {
 
     async function search() {
       const query = queryEl.value.trim();
-      if (!query) return;
-      const kind = kindEl.value;
+      if (!query) {
+        // 标签页已经限定了类型时，空关键词就给一页列表
+        if (lockedKind) await loadList();
+        return;
+      }
+      const kind = lockedKind || kindEl.value;
       const params = new URLSearchParams({ q: query, limit: "30" });
       if (kind) params.set("kind", kind);
       try {
@@ -355,6 +377,7 @@ export default {
     });
 
     await loadStats();
+    if (lockedKind) await loadList();
 
     return () => {
       resultsEl.removeEventListener("click", onResultClick);

@@ -109,19 +109,75 @@ function renderVersionBadge() {
     : "运行 scripts/import_master_mdb.py 导入国服 master.mdb 后显示版本";
 }
 
+// 一页多标签：一个页面里放多个模块的面板，用顶部标签栏切换，侧栏只出现页面本身。
+// 键是页面 id（出现在 hash 里）；tab.key 是标签在 URL 里的名字（默认与模块 id 相同），
+// tab.params 会并进面板的 ctx.params —— 同一个模块可以出现在多个标签里（图鉴的马娘 / 协助卡）。
+const PAGE_TABS = {
+  catalog: {
+    label: "图鉴",
+    tabs: [
+      { key: "characters", id: "catalog", label: "马娘", params: { kind: "character" } },
+      { key: "skills", id: "skills", label: "技能" },
+      { key: "support_cards", id: "catalog", label: "协助卡", params: { kind: "support_card" } },
+    ],
+  },
+  schedule: {
+    label: "日程",
+    tabs: [
+      { key: "events", id: "events", label: "日程" },
+      { key: "planner", id: "planner", label: "千里眼 · 规划" },
+    ],
+  },
+};
+
+function pageOfModule(moduleId) {
+  return Object.keys(PAGE_TABS).find((key) =>
+    PAGE_TABS[key].tabs.some((tab) => tab.id === moduleId),
+  );
+}
+
+// 模块被并进标签页后，旧地址（#/catalog、#/skills）要落到对应的标签上
+function tabKeyOfModule(moduleId) {
+  const pageId = pageOfModule(moduleId);
+  if (!pageId) return null;
+  return PAGE_TABS[pageId].tabs.find((tab) => tab.id === moduleId)?.key ?? null;
+}
+
+function moduleStatus(moduleId) {
+  return state.modules.find((module) => module.id === moduleId)?.status || "error";
+}
+
+function tabsPageStatus(page) {
+  return page.tabs.some((tab) => moduleStatus(tab.id) === "ok") ? "ok" : "error";
+}
+
 function renderSidebar() {
-  const items = [
-    { id: "overview", label: "概览", status: "ok" },
-    // 只把带面板且没标 hidden 的模块放侧栏：没有 [ui] 的（如 gacha）只提供接口，
-    // hidden 的（如数据同步）面板内嵌在概览页
-    ...state.modules
-      .filter((module) => module.ui?.panel && !module.ui?.hidden)
-      .map((m) => ({
-        id: m.id,
-        label: m.ui?.label || m.name,
-        status: m.status,
-      })),
-  ];
+  // 侧栏顺序 = 概览 + 各模块/页面的 order（合并页取标签里最小的 order）
+  const items = [{ id: "overview", label: "概览", order: 0, status: "ok" }];
+  const byId = new Map(state.modules.map((module) => [module.id, module]));
+  const inPages = new Set();
+  for (const [pageId, page] of Object.entries(PAGE_TABS)) {
+    page.tabs.forEach((tab) => inPages.add(tab.id));
+    const orders = page.tabs.map((tab) => byId.get(tab.id)?.order ?? 100);
+    items.push({
+      id: pageId,
+      label: page.label,
+      order: orders.length ? Math.min(...orders) : 100,
+      status: tabsPageStatus(page),
+    });
+  }
+  // 没有 [ui] 的（如 gacha）只提供接口，hidden 的（如数据同步）面板内嵌在概览页，
+  // 已并进标签页的模块不再单独出现在侧栏
+  for (const module of state.modules) {
+    if (!module.ui?.panel || module.ui?.hidden || inPages.has(module.id)) continue;
+    items.push({
+      id: module.id,
+      label: module.ui?.label || module.name,
+      order: module.order ?? 100,
+      status: module.status,
+    });
+  }
+  items.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   nav.innerHTML = items
     .map(
       (item) => `
@@ -226,6 +282,15 @@ async function renderOverview() {
     <h1 class="page-title">概览</h1>
     <p class="page-desc">所有事实性结论都应能追溯到下面的数据版本；导入或更新数据后，版本号会随之变化。</p>
     ${renderOnboarding(info)}
+    <section class="card">
+      <h2>一键刷新</h2>
+      <p class="hint" style="margin-top:0">重新导入本机 master.mdb（图鉴 / 技能 / 相性 / 赛道 / 卡池 / 规划），并抓取 BWiki（日程卡池、赛道几何、千里眼预测）。各功能页不再单独放刷新按钮，统一在这里执行。</p>
+      <div class="toolbar">
+        <button class="primary" id="refresh-all">一键刷新所有数据</button>
+        <span class="hint" id="refresh-all-hint"></span>
+      </div>
+      <div class="list" id="refresh-all-result"></div>
+    </section>
     <div class="grid two">
       <section class="card">
         <h2>数据版本</h2>
@@ -263,6 +328,49 @@ async function renderOverview() {
       </section>
     </div>
   `;
+
+  // 一键刷新：内核按模块注册顺序调用各自的 refresh，sync 先跑（重导入 catalog_* 与版本）
+  const refreshAllButton = document.getElementById("refresh-all");
+  const refreshAllHint = document.getElementById("refresh-all-hint");
+  const refreshAllResult = document.getElementById("refresh-all-result");
+  let refreshingAll = false;
+  refreshAllButton.addEventListener("click", async () => {
+    if (refreshingAll) return;
+    refreshingAll = true;
+    refreshAllButton.disabled = true;
+    refreshAllHint.textContent = "正在刷新：先重导入 master.mdb，再抓 BWiki…";
+    refreshAllResult.innerHTML = "";
+    try {
+      const result = await api("/api/system/refresh", { method: "POST" });
+      refreshAllResult.innerHTML = result.results
+        .map(
+          (row) => `
+          <div class="list-row">
+            <div>
+              <div class="name">${escapeHtml(row.name)}</div>
+              <div class="meta">${escapeHtml(
+                row.ok ? row.summary || "已刷新" : row.error || "失败",
+              )}</div>
+            </div>
+            <span class="pill ${row.ok ? "ok" : "error"}">${
+              row.ok ? `${row.duration_ms} ms` : "失败"
+            }</span>
+          </div>`,
+        )
+        .join("");
+      refreshAllHint.textContent = result.ok
+        ? `全部完成，用时 ${result.duration_ms} ms`
+        : `部分模块刷新失败，用时 ${result.duration_ms} ms`;
+      toast(result.ok ? "刷新完成" : "部分模块刷新失败", result.ok ? "info" : "error");
+      await refreshInfo();
+    } catch (error) {
+      refreshAllHint.textContent = `刷新失败：${error.message}`;
+      toast(error.message, "error");
+    } finally {
+      refreshingAll = false;
+      refreshAllButton.disabled = false;
+    }
+  });
 
   // 数据同步的面板内嵌在这张「数据版本」卡里（manifest 里标了 hidden，不进侧栏）
   const syncHost = document.getElementById("overview-sync");
@@ -315,29 +423,74 @@ function panelContext(extra = {}) {
   };
 }
 
-async function renderModule(moduleId) {
+async function mountModulePanel(host, moduleId, extraParams = null) {
   const meta = state.modules.find((m) => m.id === moduleId);
   if (!meta) {
-    view.innerHTML = `<div class="empty">模块不存在：${escapeHtml(moduleId)}</div>`;
+    host.innerHTML = `<div class="empty">模块不存在：${escapeHtml(moduleId)}</div>`;
     return;
   }
   if (meta.status !== "ok" || !meta.ui?.panel) {
-    view.innerHTML = `
+    host.innerHTML = `
       <h1 class="page-title">${escapeHtml(meta.name)}</h1>
       <div class="empty">
         ${meta.error ? escapeHtml(meta.error) : "该模块没有提供界面，可直接调用接口。"}
       </div>`;
     return;
   }
-
   const panel = await loadPanel(meta);
-  view.innerHTML = "";
+  host.innerHTML = "";
   const root = document.createElement("div");
-  view.appendChild(root);
-  const result = await panel.mount(root, panelContext());
+  host.appendChild(root);
+  // 标签页可以带固定参数（例如图鉴的 kind=character），与 URL 上的参数合并后给面板
+  const context = extraParams
+    ? panelContext({ params: mergeParams(extraParams) })
+    : panelContext();
+  const result = await panel.mount(root, context);
   if (typeof result === "function") {
     state.cleanups.push(result);
   }
+}
+
+function mergeParams(extra) {
+  const merged = new URLSearchParams(state.params ? state.params.toString() : "");
+  for (const [key, value] of Object.entries(extra)) merged.set(key, value);
+  return merged;
+}
+
+async function renderModule(moduleId) {
+  view.innerHTML = "";
+  const host = document.createElement("div");
+  view.appendChild(host);
+  await mountModulePanel(host, moduleId);
+}
+
+// 合并页：顶部标签栏 + 当前标签对应的模块面板。面板自己渲染标题与卡片，
+// 所以这里只负责标签栏，不再叠加一层页面标题（避免出现两个 h1）。
+async function renderTabsPage(pageKey, requestedTab) {
+  const page = PAGE_TABS[pageKey];
+  const activeTab = page.tabs.find((tab) => tab.key === requestedTab) || page.tabs[0];
+  view.innerHTML = "";
+
+  const bar = document.createElement("div");
+  bar.className = "page-tabs";
+  bar.setAttribute("role", "tablist");
+  bar.innerHTML = page.tabs
+    .map(
+      (tab) => `<button type="button" role="tab" class="page-tab" aria-selected="${
+        tab.key === activeTab.key
+      }" data-tab="${escapeHtml(tab.key)}">${escapeHtml(tab.label)}</button>`,
+    )
+    .join("");
+  const host = document.createElement("div");
+  view.append(bar, host);
+
+  bar.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-tab]");
+    if (!button || button.dataset.tab === activeTab.key) return;
+    location.hash = `#/${pageKey}?tab=${button.dataset.tab}`;
+  });
+
+  await mountModulePanel(host, activeTab.id, activeTab.params || null);
 }
 
 async function route() {
@@ -345,12 +498,24 @@ async function route() {
   const raw = location.hash.replace(/^#\/?/, "") || "overview";
   // 支持 #/skills?skill=200462 这种带参数的入口（面板用 ctx.params 读）
   const [requested, query = ""] = raw.split("?");
-  state.activeId = requested;
-  state.params = new URLSearchParams(query);
+  const params = new URLSearchParams(query);
+
+  // 模块被并进标签页后，旧地址（#/catalog、#/skills、#/events、#/planner）改写成对应标签
+  const ownerPage = PAGE_TABS[requested] ? null : pageOfModule(requested);
+  if (ownerPage) {
+    params.set("tab", tabKeyOfModule(requested));
+    history.replaceState(null, "", `#/${ownerPage}?${params.toString()}`);
+  }
+  const pageKey = ownerPage || (PAGE_TABS[requested] ? requested : null);
+
+  state.params = params;
+  state.activeId = pageKey || requested;
   renderSidebar();
   try {
     if (requested === "overview") {
       await renderOverview();
+    } else if (pageKey) {
+      await renderTabsPage(pageKey, params.get("tab"));
     } else {
       await renderModule(requested);
     }

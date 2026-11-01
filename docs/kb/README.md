@@ -53,6 +53,7 @@
 | S8 | BWiki 赛马娘WIKI（中文页面） | https://wiki.biligame.com/umamusume/ | 逐页 revid 见 3.2；页面发布于 2022-06 至 2026-05 | B（页面直接列出的机制与名称）/ C（具体数值与社区算法） | 用户贡献内容，版权归原作者与站点；仅读取公开页面、概述事实并署名，不批量转载。robots.txt 与访问限制见 3.3 |
 | S9 | BWiki `Data:Course/jian data.json`（简中赛道几何） | https://wiki.biligame.com/umamusume/Data:Course/jian%20data.json | revid 142169，2026-05-13T10:32:38Z | C | 社区维护的数据页；完整数据由 `races` 模块结构化导入，本目录只保留 6 条示例 |
 | S10 | 本机客户端 `master.mdb`（简中服 2.0.2） | 模拟器 `com.bilibili.umamusu` → `/data/data/com.bilibili.umamusu/files/master/master.mdb` | 2026-10-22 19:37，22.8 MB，sha256 `e0da18e6b9d1`；161 育成卡 / 362 协助卡 / 1289 技能 / 61801 文本 | **A**（与当前客户端一致） | 用户本机游戏数据，仅本地读取；提取方式见 3.4，不随仓库分发 |
+| S11 | BWiki `简中卡池` 页的「预测卡池」表（SMW `[[分类:赛马娘卡池]][[简中::未实装]]` 的 `简中开始时间` / `简中结束时间`） | https://wiki.biligame.com/umamusume/简中卡池 | 2026-11-01 抓取：138 条预测。与 mdb 已确认段按精选角色配对实测，wiki 偏晚 **+35~+55 天**（6 组样本，随日服日期递增）——说明它按「日服 + 固定偏移」推算，简中加速后就偏了 | **C**（社区推算，且实测偏晚；本项目再用 mdb 偏差做平移校正） | 仅为页面属性，不转载正文；时效数据只进 `planner` 模块与本地缓存，不进本目录 |
 
 > S3–S5 是**国际服（Global，2025 年上线）**视角，术语为英文（Carats / Team Trials / Wit 等），与简中服译名不同；机制骨架与日服一致，但**剧本实装顺序、卡池、活动节奏完全不同**。引用机制结论时不要引用其进度类内容。
 
@@ -78,6 +79,7 @@
 | 日常竞赛 | https://wiki.biligame.com/umamusume/日常竞赛 | 43433 / 2022-06-25T08:12:57Z | 日服口径中译；页面早于简中服上线 | [04-races.md](./04-races.md) |
 | 相性计算器计算方法 | https://wiki.biligame.com/umamusume/相性计算器计算方法 | 140988 / 2026-04-18T00:23:44Z | 通用社区算法（非官方公式） | [06-inheritance-and-factors.md](./06-inheritance-and-factors.md) |
 | 简中比赛 | https://wiki.biligame.com/umamusume/简中比赛 | 114667 / 2024-05-13T09:53:36Z | **简中服**赛事列表 | 未直接引用；P3-1 结构化导入参考 |
+| 简中卡池 | https://wiki.biligame.com/umamusume/简中卡池 | 2026-11-01 抓取（页面 revid 未固定，按抓取时间记录） | **简中服**卡池与「预测卡池」表；正文含跨服调整记录（−185 / −72 / +423 / +21 天） | [11-gacha-and-planning.md](./11-gacha-and-planning.md)；结构化数据由 `planner` 模块经 SMW 读取 |
 | 简/小心波澜炮！ | https://wiki.biligame.com/umamusume/简/小心波澜炮！ | 96681 / 2023-09-05T12:43:55Z | **简中服**技能页 | [05-skills.md](./05-skills.md) 触发条件示例 |
 | 简/热血进化的骑乘！ | https://wiki.biligame.com/umamusume/简/热血进化的骑乘！ | 142819 / 2026-05-17T11:50:47Z | **简中服**技能页 | [05-skills.md](./05-skills.md) 触发条件示例 |
 | Data:Course/jian data.json | https://wiki.biligame.com/umamusume/Data:Course/jian%20data.json | 142169 / 2026-05-13T10:32:38Z | **简中服**赛道几何 | [10-course-geometry.md](./10-course-geometry.md) |
@@ -164,9 +166,11 @@ uv run python scripts/fetch_mdb_android.py            # 提取到 data/mdb/maste
 | 技能完整清单、效果数值、发动条件 | 不能查具体技能的效果数值 | **已解决**：`skills` 模块（P3-3）把 1289 个技能的条件表达式、效果参数、持续时间与冷却结构化，并反查马娘 / 协助卡来源与进化关系（见 [../skills.md](../skills.md)）；`ability_type` / `target_type` / `skill_category` 没有字典表，只回显原始编号 | 编号到中文效果名的映射需外部资料确认；SP 学习成本与提示等级仍无来源 |
 | 协助卡各突破等级的训练效果数值 | 「这张卡突破到 3 突有多少友情加成」只能看攻略 | **已解决**：图鉴详情把 `support_card_effect_table` 的等级档位按 `support_card_limit` 折算成 0–4 突五列（每列都是练到该档等级上限后的值）；效果名称改用主数据自带的 `text_data` 151/154；固有效果另起一块，用 `text_data` 155 的成句文案说明，条件型加成（101–120）的发动条件就写在那句话里（见 [../catalog.md](../catalog.md)） | 条件型加成的 `value_N` 是各类型自定义参数，主数据无逐类型说明，因此只显示条件与效果名、不算数值 |
 | 状态（コンディション）效果与数值 | 只能泛泛说「有负面状态」 | **已补**：[09-status-effects.md](./09-status-effects.md) 收录 BWiki「育成状态」页的名称、效果与页面数值；获取概率与简中服当前值未覆盖 | 用更新的简中服 `master.mdb` 文本表逐条核对状态名 |
-| 赛道几何（分段、终直、坡道） | 不能回答「这条赛道几段直线 / 坡道」 | **已解决**：`races` 模块（P3-1）已结构化全部 107 条赛道的分段、坡道与终直，[10-course-geometry.md](./10-course-geometry.md) 保留 6 条示例作说明；14 条地方 / 海外场地无几何 | 后续赛道更新只需在「赛道」页刷新 BWiki 数据页 |
+| 赛道几何（分段、终直、坡道） | 不能回答「这条赛道几段直线 / 坡道」 | **已解决**：`races` 模块（P3-1）已结构化全部 107 条赛道的分段、坡道与终直，[10-course-geometry.md](./10-course-geometry.md) 保留 6 条示例作说明；14 条地方 / 海外场地无几何 | 后续赛道更新只需在「概览」页一键刷新（会重抓 BWiki 数据页） |
 | 简中服译名与术语 | 少量新系统缺官方文本 | **已改善**：本地库已换用 S10（2026-10-22，2.0.2）当期文本；新增「觉醒」「剧本」技能分类来自 `skill_upgrade_description` / `skill_upgrade_speciality` 参照表。术语表本身尚未按新数据重跑 | 用 S10 重跑术语提取，更新 [08-glossary.md](./08-glossary.md) |
-| 简中服版本进度、卡池与活动日程 | 助手不能回答「简中服现在到哪个池」 | **已由模块覆盖，不入库**：`events` 模块抓 BWiki 的**简中服**卡池（不跟踪繁中 / 日服，也不跟踪活动），`gacha` 模块读 `master.mdb` 的 `gacha_data`（含未来卡池，可提前预告）；时效数据仍刻意不写入知识库 | 时效数据会过期，只通过模块 + `fetched_at` 展示 |
+| 简中服版本进度、卡池与活动日程 | 助手不能回答「简中服现在到哪个池」，也不能回答「下个月有哪些池」 | **已由模块覆盖，不入库**：`events` 模块抓 BWiki 的**简中服**卡池（不跟踪繁中 / 日服，也不跟踪活动），`gacha` / `planner` 模块读 `master.mdb` 的 `gacha_data`（含未来卡池）与 `story_event_data`（剧情活动排期）。**简中服在加速、日服对不上轴**：活动只用 mdb 排期，预测卡池用 mdb 实测偏差平移（[planner.md](../planner.md)）。时效数据仍刻意不写入知识库 | 时效数据会过期，只通过模块 + `fetched_at` 展示 |
+| 育成活动（竞速嘉年华等）的简中排期 | 助手不能回答「下次竞速嘉年华什么时候」 | **未覆盖**：`story_event_data` 只有剧情活动；育成活动在客户端里没有可读的简中排期，BWiki 活动表只有日服时间，且简中活动顺序与日服不一致，不能对轴 | 等客户端补表或官方公告；在此之前不展示、不推算 |
+| 抽卡的「点数如何累积」规则 | 天井萝卜只能按「1 抽 = 1 点」推导，不是官方公示 | **未覆盖**：mdb 只有 `gacha_exchange.pay_item_num`（兑换 Up 卡需要的点数），没有点数累积规则表；BWiki 卡池页也没有写 | 需要官方规则原文或可靠二手来源；在此之前回答必须带上这个前提（见 [11-gacha-and-planning.md](./11-gacha-and-planning.md)） |
 | 大赛（CM）当期赛道与规则 | 只能解释赛制，不能给当期作业 | **数据侧已具备**：`champions_schedule`(29) / `champions_round_schedule`(174) / `champions_race_condition`(203) 在 mdb 里，含起止时间、轮次与每轮赛道，已由 `modules/races` 的「大赛（群英联赛）」面板提供。**对手阵容与当届环境使用率仍无来源** | 环境数据需外部统计，不自行编造 |
 | 社团成员每月粉丝与贡献 | 助手不能查任意社团的成员贡献 | **部分覆盖（实验性）**：`circles` 模块读第三方站点 `umamusume.space`，但它只跟踪约 160 个社团，未收录的社团接口返回 404；官方没有开放接口 | 需要更多社团时由用户在站点侧申请收录（QQ 群）；抓包补齐违反合规红线，不做 |
 
@@ -174,7 +178,7 @@ uv run python scripts/fetch_mdb_android.py            # 提取到 data/mdb/maste
 
 - 本目录的 `.md` 文件可通过 `knowledge` 模块的 `/api/knowledge/documents` 接口导入（支持 md/txt/pdf，按标题层级切块，标题会进入检索上下文）。
 - 批量导入：应用运行时执行 `uv run python scripts/import_kb.py`，默认导入 `docs/kb/*.md`；重复导入会被识别为重复文档，不会产生副本。
-- 文件头部的「来源 / 版本 / 抓取时间」会被一并切块，因此检索结果天然带出处，便于回答时引用。当前 11 篇共切分为 165 个块（2026-10-26 实测）。
+- 文件头部的「来源 / 版本 / 抓取时间」会被一并切块，因此检索结果天然带出处，便于回答时引用。当前 12 篇（含本 README）共 191 个块（2026-11-01 实测；`11-gacha-and-planning.md` 占 8 块）。
 - 素材改动后重跑 `scripts/import_kb.py` 即可：脚本会先删掉内容已变化的同名旧文档，再导入新版本，避免旧切块继续参与检索。
 - **修改本目录的内容等同于修改知识库事实来源**，提交信息请使用 `docs(kb): ...`，并在 PR 描述里写明新增事实的来源 URL 与抓取时间。
 
@@ -191,6 +195,7 @@ uv run python scripts/fetch_mdb_android.py            # 提取到 data/mdb/maste
 | 技能 | 颜色分类、负面技能成因、固有与进化技能规则、2 个简中技能页的触发条件 | 「该不该学某技能」 | `ability_type` 等编号的中文含义、SP 学习成本；`skills` 模块可查全部 1289 个技能的条件与效果原始值 |
 | 继承与因子 | 继承次数与参与者、相性影响因素与等级阈值、四色因子规则、重抽规则 | 「这只该不该继承」 | 具体马娘组合的相性分数 **已由 `succession` 模块提供**（两人点数 + 六人布局，不含适性）；因子出率仍无来源 |
 | 强化与资源 | 觉醒/开花/解锁上限的作用与上限、扭蛋结构 | 「这张卡要不要满破」 | 各阶段消耗数量、卡池强度 |
+| 卡池与规划 | 卡池与剧情活动的数据字段、天井点数与单抽成本从哪来、为什么跨服对轴不可用、mdb 偏差怎么量 | 「这半年的池子怎么分配萝卜」（要用户自己的收入与偏好，交给 `planner` 模块算） | 当期具体开到哪一期（时效，见模块）、卡池强度评价、官方天井规则原文、育成活动的简中排期 |
 ## 7. 索引
 
 | 文件 | 内容 |
@@ -205,4 +210,5 @@ uv run python scripts/fetch_mdb_android.py            # 提取到 data/mdb/maste
 | [08-glossary.md](./08-glossary.md) | 日 / 英 / 简中术语对照（简中列标注核实状态） |
 | [09-status-effects.md](./09-status-effects.md) | 育成状态的简中名称、效果与页面数值 |
 | [10-course-geometry.md](./10-course-geometry.md) | 简中赛道几何：6 条示例的分段、直线段数与坡道 |
+| [11-gacha-and-planning.md](./11-gacha-and-planning.md) | 卡池与剧情活动的数据结构、天井与成本的可信部分、跨服对轴为什么不可用与偏差校正口径 |
 

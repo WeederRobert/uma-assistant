@@ -20,4 +20,8 @@ def setup(ctx: ModuleContext) -> Module:
             summary.members,
         )
     ctx.logger.info("相性模块就绪")
-    return Module(router=build_router(service), status=service.status)
+    return Module(
+        router=build_router(service),
+        status=service.status,
+        refresh=lambda: service.refresh(force=True),
+    )

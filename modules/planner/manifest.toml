@@ -1,0 +1,14 @@
+[module]
+id = "planner"
+name = "规划"
+version = "0.1.0"
+description = "千里眼：近半年的卡池与活动预测（master.mdb 已确认排期 + BWiki 简中预测），并据此做萝卜与抽券规划"
+order = 65
+requires = []
+
+[api]
+prefix = "/api/planner"
+
+[ui]
+label = "规划"
+panel = "panel.js"

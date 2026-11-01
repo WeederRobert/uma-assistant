@@ -22,4 +22,5 @@ def setup(ctx: ModuleContext) -> Module:
         router=build_router(service),
         on_shutdown=service.close,
         status=service.status,
+        refresh=lambda: service.refresh(None, force=True),
     )

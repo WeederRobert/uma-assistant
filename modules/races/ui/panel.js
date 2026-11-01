@@ -84,13 +84,9 @@ export default {
       <h1 class="page-title">赛道</h1>
       <p class="page-desc">赛事目录来自 master.mdb（客户端原始数据），赛道路线、终直与坡道来自 BWiki 数据页（社区整理，字段含义为推断）。这里给出的是结构化事实，不含最高速度、加速度与天气修正公式。</p>
       <section class="card">
-        <h2>数据来源</h2>
-        <div class="toolbar">
-          <button class="ghost" id="races-refresh">刷新赛道数据</button>
-          <span class="hint" id="races-refresh-hint"></span>
-        </div>
+        <h2>数据概况</h2>
         <dl class="kv" id="races-source"></dl>
-        <div class="answer" id="races-refresh-result" style="margin-top:12px" hidden></div>
+        <p class="hint" id="races-note" hidden></p>
       </section>
 
       <section class="card" style="margin-top:16px">
@@ -153,31 +149,19 @@ export default {
     const queryEl = root.querySelector("#races-query");
     const officialEl = root.querySelector("#races-official");
     const sourceEl = root.querySelector("#races-source");
-    const refreshHintEl = root.querySelector("#races-refresh-hint");
-    const refreshResultEl = root.querySelector("#races-refresh-result");
-    const refreshButton = root.querySelector("#races-refresh");
+    const noteEl = root.querySelector("#races-note");
     const condAreaEl = root.querySelector("#cond-area");
     const condSeasonEl = root.querySelector("#cond-season");
     const condTableEl = root.querySelector("#cond-table");
     const condHintEl = root.querySelector("#cond-hint");
 
     function setRefreshResult(text) {
-      refreshResultEl.textContent = text || "";
-      refreshResultEl.hidden = !text;
+      noteEl.textContent = text || "";
+      noteEl.hidden = !text;
     }
 
     function renderSource() {
       const counts = status.counts || {};
-      const geometry = status.geometry || null;
-      const catalog = status.catalog || null;
-      refreshHintEl.textContent = status.mdb?.exists
-        ? `master.mdb ${status.mdb.size_mb} MB`
-        : "未找到 master.mdb，赛事目录无法导入";
-      const geometryLine = geometry
-        ? `${escapeHtml(geometry.page)} · revid ${num(geometry.revid)} · 抓取于 ${escapeHtml(
-            shortTime(geometry.fetched_at),
-          )}${geometry.from_cache ? "（缓存）" : ""}${geometry.stale ? "（抓取失败，用旧缓存）" : ""}`
-        : "还没有导入赛道几何";
       sourceEl.innerHTML = `
         <dt>赛事</dt><dd>${counts.races || 0} 场（正式赛事 ${counts.official_races || 0}）</dd>
         <dt>赛道</dt><dd>${counts.courses || 0} 条，其中有几何数据 ${
@@ -185,21 +169,12 @@ export default {
         } 条</dd>
         <dt>场地状态</dt><dd>${num(counts.conditions)} 条出现率记录</dd>
         <dt>大赛排期</dt><dd>${counts.champions || 0} 届（群英联赛）· 在「日程」页查看</dd>
-        <dt>目录来源</dt><dd>${escapeHtml(catalog?.source || "未导入")}${
-          catalog ? ` · 导入于 ${escapeHtml(shortTime(catalog.imported_at))}` : ""
-        }</dd>
-        <dt>几何来源</dt><dd>C 级 · ${geometryLine}${
-          geometry?.url
-            ? ` · <a class="source-link" href="${escapeHtml(geometry.url)}" target="_blank" rel="noreferrer">原页</a>`
-            : ""
-        }</dd>
-        <dt>数据版本</dt><dd>${escapeHtml(status.data_version?.version || "未知")}</dd>
       `;
       if (!counts.races) {
         setRefreshResult(
           status.mdb?.exists
-            ? "还没有赛事目录，点「刷新赛道数据」导入一次。"
-            : `没有找到 ${escapeHtml(status.mdb?.path || "master.mdb")}，先在「数据同步」里导入一次。`,
+            ? "还没有赛事目录：在「概览」页点一次「一键刷新」。"
+            : `没有找到 ${escapeHtml(status.mdb?.path || "master.mdb")}，先在「概览」页导入一次。`,
         );
       }
     }
@@ -485,51 +460,6 @@ export default {
       if (event.key === "Enter") {
         event.preventDefault();
         loadRaces().catch((error) => toast(error.message, "error"));
-      }
-    });
-
-    refreshButton.addEventListener("click", async () => {
-      if (refreshing) return;
-      refreshing = true;
-      refreshButton.disabled = true;
-      refreshButton.textContent = "刷新中…";
-      setRefreshResult("正在导入赛事目录并抓取赛道数据页，请稍候。");
-      try {
-        const result = await api(`${API}/refresh`, {
-          method: "POST",
-          body: JSON.stringify({ force: true }),
-        });
-        status = await api(`${API}/status`);
-        renderSource();
-        await loadCourses();
-        await loadRaces();
-        await loadConditions();
-        const lines = [];
-        if (result.catalog) {
-          lines.push(
-            `赛事目录：${result.catalog.races} 场 / 赛道 ${result.catalog.courses} 条（跳过无名称 ${result.catalog.skipped} 场）· 大赛 ${result.catalog.champions} 届 · 场地状态 ${result.catalog.conditions} 条`,
-          );
-        }
-        if (result.geometry) {
-          lines.push(
-            `赛道几何：${result.geometry.courses} 条${
-              result.geometry.with_warnings
-                ? `，其中 ${result.geometry.with_warnings} 条有提示`
-                : ""
-            }${result.geometry.missing_geometry ? `；${result.geometry.missing_geometry} 条没有几何数据` : ""}`,
-          );
-        }
-        if (result.error) lines.push(`问题：${result.error}`);
-        (result.skipped || []).slice(0, 5).forEach((line) => lines.push(`· ${line}`));
-        setRefreshResult(lines.join("\n") || "刷新完成。");
-        toast(`刷新完成：赛道 ${result.geometry?.courses ?? 0} 条`, "info");
-      } catch (error) {
-        setRefreshResult(`刷新失败：${error.message}`);
-        toast(error.message, "error");
-      } finally {
-        refreshing = false;
-        refreshButton.disabled = false;
-        refreshButton.textContent = "刷新赛道数据";
       }
     });
 

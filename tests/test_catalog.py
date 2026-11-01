@@ -242,6 +242,13 @@ def test_import_and_query(settings: Settings, tmp_path: Path) -> None:
         assert len(support_cards) == 1
         assert support_cards[0]["title"] == "先行花开"
 
+        # 「图鉴」页的马娘 / 协助卡是独立标签页，没有关键词时给一页列表
+        listed = client.get("/api/catalog/list", params={"kind": "character"}).json()
+        assert listed["kind"] == "character"
+        assert len(listed["items"]) == 2
+        assert all(item["kind"] == "character" for item in listed["items"])
+        assert client.get("/api/catalog/list", params={"kind": "nope"}).status_code == 422
+
         skills = client.get("/api/catalog/search", params={"q": "末脚"}).json()["items"]
         assert skills[0]["name"] == "末脚"
         assert skills[0]["description"] == "在最终直线提升速度"

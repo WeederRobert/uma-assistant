@@ -18,4 +18,8 @@ def setup(ctx: ModuleContext) -> Module:
             "启动时补导入技能数据：%d 个技能 / %d 条效果", summary.skills, summary.effects
         )
     ctx.logger.info("技能模块就绪")
-    return Module(router=build_router(service), status=service.status)
+    return Module(
+        router=build_router(service),
+        status=service.status,
+        refresh=lambda: service.refresh(force=True),
+    )

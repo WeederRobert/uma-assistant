@@ -3,7 +3,7 @@ id = "skills"
 name = "技能"
 version = "0.1.0"
 description = "技能条件与效果参数、反查马娘与协助卡、进化前后关系；全部来自 master.mdb，解析不了的字段回显原始值"
-order = 55
+order = 40
 requires = ["catalog"]
 
 [api]

@@ -15,6 +15,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 马娘 / 协助卡 / 技能 / 赛事 / 卡池 / 相性等结构化数据 | 用户本机客户端里的 `master.mdb` | 手动选择文件，或经 adb 从用户自己的设备 `adb pull` | A（游戏本体数据） | 否 | `<data_dir>/mdb/master.mdb`，导入结果进 `<data_dir>/app.db` |
 | 简中服卡池排期 | BWiki 赛马娘 WIKI 的 SMW 接口 | 串行请求 + 默认 1.5 s 间隔 + 6 h TTL 缓存 | B（页面直接列出的排期）/ C（社区预测） | 否，只缓存到本地 | `<data_dir>/modules/events/cache/` |
+| 简中预测卡池（千里眼） | BWiki SMW：`[[分类:赛马娘卡池]][[简中::未实装]]`（卡池页面自己算好的 `简中开始时间`；**简中加速后实测偏晚**，本项目用 mdb 偏差平移） | 同上限速 + 6 h TTL 缓存 | C（社区志愿者按日服节奏推算的简中预测时间，非官方） | 否，只缓存到本地 | `<data_dir>/modules/planner/cache/`，解析结果进 `planner_*` 表 |
 | 赛道几何（分段、坡道、方向） | BWiki `Data:Course/jian data.json` | 同上限速 + 24 h TTL 缓存 | C（社区整理，含已知源数据缺陷） | 否，只缓存到本地 | `<data_dir>/app.db` 的 `races_*` 表 |
 | 机制知识库素材（`docs/kb/*.md`，11 篇） | 日文维基 / 官方介绍页 / BWiki 等，逐篇登记 | **概述事实 + 署名**，不转载原文 | B / C，逐篇标注 | **是**（属于本项目的原创概述） | 仓库内 `docs/kb/` |
 | 社团当月增粉与成员贡献（**实验性**） | 第三方玩家站点 `umamusume.space` 的公开只读接口 | 未收录社团的收录入口在站点侧（QQ 群）；本模块只发 GET，不登录、不提交表单 | C（第三方自采，非官方） | 否，只落到本机 `circles_*` 表 | `<data_dir>/app.db` 的 `circles_circles` / `circles_members` |

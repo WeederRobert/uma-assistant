@@ -33,11 +33,13 @@ def _plus(value: Any) -> str:
 
 
 # 话题 → 关键词（命中即认为在问该话题）。顺序有意义：大赛要先查，
-# 因为「这届大赛的赛道」需要先拿到大赛记录里的 course_id
+# 因为「这届大赛的赛道」需要先拿到大赛记录里的 course_id；
+# 千里眼放在卡池前面，「接下来半年有什么池」要优先给预测而不是当期排期。
 TOPICS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("champions", ("大赛", "冠军大会", "群英联赛", "cm", "杯")),
     ("course", ("赛道", "终直", "坡道", "分段", "弯道", "直线")),
     ("skill", ("技能", "固有", "觉醒", "发动条件", "末脚")),
+    ("forecast", ("千里眼", "预测", "未来卡池", "接下来", "半年", "攒钻", "萝卜规划", "钻石规划")),
     ("gacha", ("卡池", "招募", "池子", "抽卡")),
     ("catalog", ("属性加成", "天赋", "协助卡", "支援卡", "这张卡", "马娘")),
 )
@@ -151,6 +153,8 @@ class StructuredLookup:
                     self._champions(result)
                 elif topic == "skill":
                     self._skill(question, result)
+                elif topic == "forecast":
+                    self._forecast(result)
                 elif topic == "gacha":
                     self._gacha(result)
                 elif topic == "catalog":
@@ -345,6 +349,41 @@ class StructuredLookup:
                 data_version=self.data_version,
                 lines=lines,
                 payload={"active": len(active), "upcoming": len(upcoming)},
+            )
+        )
+
+    # ------------------------------------------------------------------ 千里眼
+    def _forecast(self, result: StructuredResult) -> None:
+        """近半年预测：已确认段看 mdb，之后看 BWiki 的简中推算（已按 mdb 实测偏差校正）。"""
+        data = self._get("/api/planner/forecast", {"days": "180"}) or {}
+        pools = [item for item in (data.get("pools") or []) if item.get("segment") == "predicted"]
+        events = data.get("events") or []
+        if not pools and not events:
+            result.misses.append("千里眼：还没有预测数据（先在「规划」页刷新一次）")
+            return
+        horizon = (data.get("horizon") or {}).get("confirmed_until_local")
+        calibration = data.get("calibration") or {}
+        lines = [f"客户端已确认排期到：{horizon}"]
+        for item in pools[:5]:
+            span = f"{item.get('starts_local')} → {item.get('ends_local')}"
+            lines.append(f"预测卡池（C 级推算）：{item.get('title')}（{span}）")
+        for item in events[:3]:
+            lines.append(f"剧情活动（A 级）：{item.get('title')}（{item.get('starts_local')}）")
+        if calibration.get("pairs"):
+            lines.append(
+                f"预测段已按 mdb 实测偏差前移 {calibration.get('bias_days')} 天"
+                f"（{calibration.get('pairs')} 组卡池配对，wiki 原本偏晚 "
+                f"{calibration.get('min_days')}~{calibration.get('max_days')} 天）"
+            )
+        result.facts.append(
+            StructuredFact(
+                topic="forecast",
+                label="千里眼（近半年预测）",
+                endpoint="/api/planner/forecast",
+                tables="planner_pools / planner_events",
+                data_version=self.data_version,
+                lines=lines,
+                payload={"predicted": len(pools), "events": len(events)},
             )
         )
 
