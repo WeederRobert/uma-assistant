@@ -1,6 +1,6 @@
 [project]
 name = "uma-assistant"
-version = "1.0.0"
+version = "1.1.0"
 description = "《闪耀！优俊少女》桌面助手：模块化、可增量开发"
 readme = "README.md"
 requires-python = ">=3.13"

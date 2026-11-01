@@ -2,7 +2,7 @@
 
 本文档是功能排期与技术债的单一来源。`README.md` 说明"现在是什么"，`docs/` 说明"为什么这样设计"，本文档说明"接下来做什么、做到什么程度算完成"。
 
-- 当前版本：`v1.0.0`；**功能进度**：P0–P3 全部完成，**P4 发布包装完成**（打包 / CI artifact / 运行时落点 / 首次引导 / 仓库模板 / 合规说明）
+- 当前版本：`v1.1.0`；**功能进度**：P0–P3 全部完成，P4 发布包装完成，P5 增补「社团粉丝（实验性）」并修复相性布局规则
 - 目标形态：Windows 桌面应用，本地运行、数据可追溯、功能按模块增量交付
 - 优先级原则：**数据可信 > 数据自助 > 时效信息 > 玩法深度 > 发布包装**
 
@@ -83,8 +83,9 @@ flowchart LR
     V4["v0.4.0<br/>时效信息<br/>已完成（简中卡池 + 汇总页）"]
     V5["v0.5.0<br/>玩法深度<br/>赛道 / 大赛 / 场地 / 技能已完成"]
     V6["v1.0.0<br/>公开发布"]
+    V7["v1.1.0<br/>社团粉丝（实验性）+ 相性规则修复"]
 
-    V1 --> V2 --> V3 --> V4 --> V5 --> V6
+    V1 --> V2 --> V3 --> V4 --> V5 --> V6 --> V7
 ```
 
 每个版本必须满足：`ruff check`、`ruff format --check`、`pytest` 全绿，且 `README.md` 的模块一览表与实际模块一致。
@@ -245,6 +246,16 @@ flowchart LR
 | P4-3 | 首次使用引导 | 无数据时明确告诉用户下一步做什么，而不是空白界面 | P1 | ✅ `/api/system/info` 新增 `setup`（`first_run` / `mdb_present` / `can_import_via_ui` / `degraded_modules`）与 `paths`；概览页在首次运行时给出「导入数据 → 配置问答 → 查询」三步，可直接跳到「数据同步」；打包版不再提示源码里才有的 CLI 命令 |
 | P4-4 | 开源仓库整理 | `LICENSE` / `CONTRIBUTING` / `docs` 齐备，Issue 与 PR 模板 | P0 | ✅ 新增 `.github/ISSUE_TEMPLATE/{bug_report,feature_request,config}.yml` 与 `.github/PULL_REQUEST_TEMPLATE.md`（模板里带「不贴游戏资源 / 不贴 key」的必勾项） |
 | P4-5 | 数据合规说明 | 说清哪些数据来自哪里、哪些不分发 | P2 | ✅ [docs/data-policy.md](docs/data-policy.md)：来源清单（含可信级别与落点）、不分发范围、数据落点、唯一的离机路径（知识库问答发给 DeepSeek）、抓取礼节；README「合规边界」与 Issue 模板均链接过去 |
+
+## P5 — 社团粉丝（实验性，v1.1.0）
+
+| ID | 任务 | 验收标准 | 依赖 | 状态 |
+| --- | --- | --- | --- | --- |
+| P5-1 | 社团粉丝模块 | 读第三方 `umamusume.space` 公开只读接口，展示社团当月增粉与成员贡献占比 | — | ✅ `modules/circles/`（`circles_*` 三张表、4 个接口、侧栏「社团」）；实测 159 个社团、颂乐人偶 30 人合计 158.72 亿 vs 榜单 158.73 亿；`tests/test_circles.py` 10 例 |
+| P5-2 | 相性布局规则补全 | 祖父母之间、祖父母与父母不能同角色；目标与祖父母同角色时该位记 0 | — | ✅ 服务端 422 点名、面板按钮禁用并提示；补 3 例测试（夹具扩到 7 个角色） |
+| P5-3 | 发布 v1.1.0 | 版本号、README、ROADMAP、GitHub Release 与产物齐备 | P5-1, P5-2 | ✅ 版本号 1.1.0；Release 附 `uma-assistant-windows.zip` |
+
+> v1.1.0 不含新数据：`master.mdb` 仍需用户自行导入，知识库素材仍需用户自行导入（精简版无向量化组件）。这是 [docs/data-policy.md](docs/data-policy.md) 的红线，不是遗漏。
 
 ## 模块路线
 
