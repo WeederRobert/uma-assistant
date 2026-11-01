@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -326,6 +327,39 @@ def test_predicted_pool_is_shifted_by_measured_bias(service: PlannerService) -> 
     raw = datetime.fromisoformat(predicted["source_starts_local"])
     shifted = datetime.fromisoformat(predicted["starts_local"])
     assert (raw - shifted).days == 44
+
+
+def test_calibration_uses_the_most_recent_sample(service: PlannerService) -> None:
+    """偏差随时间递增，平移量要取最近一次实测，而不是把早期小偏差平均进来。"""
+    service.refresh(force=True)
+    stamp = lambda days: int((datetime.now(CST) + timedelta(days=days)).timestamp())  # noqa: E731
+    service.db.execute(
+        "INSERT INTO planner_pools (uid, source_key, segment, title, card_type, gacha_type, "
+        "start_ts, end_ts, jp_start_ts, cost_single, ceiling_pulls, pickups, ids, source_level, "
+        "source_url, fetched_at) VALUES "
+        "('mdb:9101', 'mdb', 'confirmed', '精选 优俊少女招募', 1, 3, ?, ?, NULL, 150, 200, '', "
+        "?, 'A', '', '2026-11-01T00:00:00+00:00')",
+        (stamp(100), stamp(200), json.dumps({"card_ids": ["2005"]})),
+    )
+    service.db.execute(
+        "INSERT INTO planner_pools (uid, source_key, segment, title, card_type, gacha_type, "
+        "start_ts, end_ts, jp_start_ts, cost_single, ceiling_pulls, pickups, ids, source_level, "
+        "source_url, fetched_at) VALUES "
+        "('wiki:更晚的池', 'wiki-predicted', 'overlap', '更晚的池 UP卡池', NULL, NULL, ?, ?, NULL, "
+        "150, 200, '', ?, 'C', '', '2026-11-01T00:00:00+00:00')",
+        (stamp(160), stamp(170), json.dumps({"char_ids": ["2005"], "support_ids": []})),
+    )
+
+    calibration = service.status()["calibration"]
+
+    assert calibration["pairs"] == 2
+    assert calibration["used_days"] == 60, "最近一次实测是 +60 天"
+    assert calibration["bias_days"] == pytest.approx(52, abs=0.1), "中位数只作展示"
+    assert service.forecast(days=365)["pools"]
+    predicted = next(
+        item for item in service.forecast(days=365)["pools"] if item["segment"] == "predicted"
+    )
+    assert predicted["correction_days"] == 60
 
 
 def test_forecast_hides_overlap_by_default(service: PlannerService) -> None:

@@ -207,9 +207,7 @@ export default {
         calibration.min_days === calibration.max_days
           ? `+${calibration.min_days} 天`
           : `+${calibration.min_days}~+${calibration.max_days} 天`;
-      return `wiki 偏晚实测 ${range}（${calibration.pairs} 组卡池配对，中位数 +${
-        calibration.bias_days
-      } 天，已按中位数前移）`;
+      return `wiki 偏晚实测 ${range}（${calibration.pairs} 组配对，按最近一次 ${calibration.used_days} 天前移；偏差仍在扩大）`;
     }
 
     function section(key, title, items, rowFn, emptyText) {
@@ -484,7 +482,7 @@ export default {
         const counts = result.counts || {};
         toast(
           `已刷新：预测 ${counts.predicted || 0} · 活动 ${counts.events || 0}` +
-            (result.calibration?.pairs ? ` · 偏差中位数 +${result.calibration.bias_days} 天` : ""),
+            (result.calibration?.pairs ? ` · 偏差按最近实测 +${result.calibration.used_days} 天` : ""),
         );
         await loadForecast();
         await loadStatus();

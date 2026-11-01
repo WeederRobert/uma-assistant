@@ -262,21 +262,33 @@ class PlannerService:
             return {
                 "pairs": 0,
                 "bias_days": 0,
+                "recent_days": 0,
+                "used_days": 0,
+                "basis": "none",
                 "min_days": None,
                 "max_days": None,
                 "samples": [],
                 "note": "没有可与 mdb 对齐的样本，预测段未校正（wiki 原值可能偏晚 1~2 个月）。",
             }
-        deltas = [sample["bias_days"] for sample in samples]
+        ordered = sorted(samples, key=lambda item: item["actual_start_ts"])
+        deltas = [sample["bias_days"] for sample in ordered]
+        # 偏差是随时间递增的（简中在加速），所以平移量取**最近一次实测**，
+        # 而不是整段的中位数：中位数会被早期的小偏差拖低，校正不足。
+        recent = ordered[-1]["bias_days"]
         return {
-            "pairs": len(samples),
+            "pairs": len(ordered),
             "bias_days": round(statistics.median(deltas), 1),
+            "recent_days": recent,
+            "used_days": recent,
+            "basis": "recent",
             "min_days": min(deltas),
             "max_days": max(deltas),
-            "samples": sorted(samples, key=lambda item: item["actual_start_ts"]),
+            "samples": ordered,
             "note": (
-                "偏差 = wiki 预测日期 − mdb 实际日期；取中位数做平移校正。"
-                "简中服加速时偏差会随时间扩大，越远的预测误差越大。"
+                "偏差 = wiki 预测日期 − mdb 实际日期，随时间递增（简中在加速），"
+                f"所以平移量取最近一次实测的 {recent:g} 天"
+                f"（区间 {min(deltas):g}~{max(deltas):g} 天）。"
+                "偏差仍在扩大，靠后的预测即使校正过也可能仍偏晚。"
             ),
         }
 
@@ -337,7 +349,7 @@ class PlannerService:
         end_stamp = int((now + timedelta(days=window_days)).timestamp())
         start_stamp = int((now - timedelta(days=7)).timestamp())
         calibration = self._calibration()
-        bias_days = float(calibration.get("bias_days") or 0)
+        bias_days = float(calibration.get("used_days") or 0)
 
         items = [self._pool_item(row, now, bias_days) for row in store.list_pools(self.db)]
         pools = [
