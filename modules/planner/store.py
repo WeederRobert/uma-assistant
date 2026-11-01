@@ -75,25 +75,26 @@ def replace_mdb_pools(db: Database, rows: list[tuple[Any, ...]]) -> None:
             conn.executemany(_insert_sql("planner_pools", POOL_COLUMNS), rows)
 
 
-def replace_wiki(
-    db: Database,
-    pool_rows: list[tuple[Any, ...]],
-    event_rows: list[tuple[Any, ...]],
-) -> None:
+def replace_mdb_events(db: Database, rows: list[tuple[Any, ...]]) -> None:
+    """活动只有 mdb 一个来源，整表替换（顺带清掉旧版本留下的跨服换算行）。"""
+    with db.transaction() as conn:
+        conn.execute("DELETE FROM planner_events")
+        if rows:
+            conn.executemany(_insert_sql("planner_events", EVENT_COLUMNS), rows)
+
+
+def replace_wiki(db: Database, pool_rows: list[tuple[Any, ...]]) -> None:
+    """预测段整体替换：BWiki 的行每次刷新重写，mdb 的已确认段不动。"""
     with db.transaction() as conn:
         conn.execute("DELETE FROM planner_pools WHERE source_key = 'wiki-predicted'")
-        conn.execute("DELETE FROM planner_events")
         if pool_rows:
             conn.executemany(_insert_sql("planner_pools", POOL_COLUMNS), pool_rows)
-        if event_rows:
-            conn.executemany(_insert_sql("planner_events", EVENT_COLUMNS), event_rows)
 
 
 def clear_wiki(db: Database) -> None:
     """来源整体失败时清掉预测段，避免把上一次的成功结果当成这次的结果。"""
     with db.transaction() as conn:
         conn.execute("DELETE FROM planner_pools WHERE source_key = 'wiki-predicted'")
-        conn.execute("DELETE FROM planner_events")
 
 
 def _rows(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:

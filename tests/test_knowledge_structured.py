@@ -223,12 +223,12 @@ def test_gacha_fact_lists_active_and_upcoming() -> None:
     assert any(line.startswith("未开始：精选 协助卡招募") for line in lines)
 
 
-def test_forecast_fact_reports_predicted_pools_and_offset() -> None:
+def test_forecast_fact_reports_predicted_pools_and_bias() -> None:
     lookup, _ = build_lookup(
         {
             "/api/planner/forecast": {
                 "horizon": {"confirmed_until_local": "2027-01-26T11:59:59+08:00"},
-                "offset": {"median_days": 1104.0, "pairs": 136},
+                "calibration": {"pairs": 3, "bias_days": 44.0, "min_days": 40.0, "max_days": 50.0},
                 "pools": [
                     {"segment": "confirmed", "title": "精选 优俊少女招募"},
                     {
@@ -242,7 +242,6 @@ def test_forecast_fact_reports_predicted_pools_and_offset() -> None:
                     {
                         "title": "剧情活动「测试」",
                         "starts_local": "2027-02-08T12:00:00+08:00",
-                        "basis_label": "偏移推算",
                     }
                 ],
             }
@@ -253,7 +252,8 @@ def test_forecast_fact_reports_predicted_pools_and_offset() -> None:
 
     fact = next(item for item in result.facts if item.topic == "forecast")
     assert any("强击 UP卡池" in line and "C 级推算" in line for line in fact.lines)
-    assert any("1104 天" in line for line in fact.lines)
+    assert any("前移 44" in line and "40.0~50.0" in line for line in fact.lines)
+    assert any("剧情活动「测试」" in line and "A 级" in line for line in fact.lines)
     # 已确认段由 gacha 话题负责，预测事实里不重复列
     assert all("精选 优俊少女招募" not in line for line in fact.lines)
 

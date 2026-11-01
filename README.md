@@ -173,7 +173,7 @@ uma-assistant/
 | 相性 | `master.mdb` 的 `succession_relation` / `_member` / `_rank`（2133 组 / 4527 成员 / 3 档），两人点数与六人布局分数；明确不含适性（主数据无适性表） | [docs/succession.md](docs/succession.md) |
 | 社团粉丝（实验性） | 第三方站点 `umamusume.space` 的公开只读接口：社团当月增粉 + 逐成员贡献占比；数据由玩家自采、非官方，站点未收录的社团查不到，接口改版即失效 | [docs/circles.md](docs/circles.md) |
 | 卡池预告 | `master.mdb` 的 `gacha_data`／`text_data`／`gacha_available` 给出卡池排期与精选，含尚未开放的未来卡池（当期快照排到 2027-01-18），已用 BWiki 当期卡池交叉验证；面板并入「日程」页 | [docs/gacha.md](docs/gacha.md) |
-| 千里眼 / 萝卜规划 | mdb 已确认段（A 级）+ BWiki `[[简中::未实装]]` 预测卡池（C 级，带 `简中开始时间`）；活动表只有日服时间，用卡池反推的偏移（实测 1104 天，136 组校验）换算。天井萝卜 = `gacha_exchange.pay_item_num` × `cost_single`；收入由用户自填 | [docs/planner.md](docs/planner.md) |
+| 千里眼 / 萝卜规划 | mdb 已确认段（A 级：`gacha_data` 卡池 + `story_event_data` 剧情活动）+ BWiki `[[简中::未实装]]` 预测卡池（C 级）。简中服在加速、日服对不上轴，所以活动不换算，预测卡池用 mdb 实测偏差（中位数）平移并给出区间；天井萝卜 = `gacha_exchange.pay_item_num` × `cost_single`；收入由用户自填 | [docs/planner.md](docs/planner.md) |
 | 日志 | 控制台 + `data/logs/app.log`，`RotatingFileHandler` 1 MB × 3 份；uvicorn 也走同一份配置 | — |
 | 打包发布 | PyInstaller 出**精简版**（44 MB，不含 ML 依赖）；`UMA_BUNDLE_ML=1` 出完整版；CI 在 `windows-latest` 上出包并跑启动冒烟 | [docs/packaging.md](docs/packaging.md) |
 | 运行时落点 | 源码运行写项目内 `data/`；打包后写 `%LOCALAPPDATA%\uma-assistant\data\`，只读资源走 `_MEIPASS`，业务代码只认 `Settings.data_dir` / `tmp_dir` | [docs/packaging.md](docs/packaging.md) |

@@ -1,17 +1,20 @@
-"""规划模块的业务逻辑：千里眼窗口、活动换算与萝卜规划计算。
+"""规划模块的业务逻辑：千里眼窗口、预测校正与萝卜规划计算。
 
 口径都写在这里，面板只做展示：
 
-- **已确认段**取 ``master.mdb`` 的 ``gacha_data``，覆盖到客户端排期的最后一刻
-  （当前快照是 2027-01-26）。这一段是 A 级数据，规划以它为准。
-- **预测段**取 BWiki 的「预测卡池」，用它自己算好的简中时间；落在已确认段之内的行
-  标 ``overlap``，只展示不参与规划，避免同一期卡池被算两次。
-- **活动**：BWiki 的活动表只有日服时间。能对上同名「活动卡池」的，直接用卡池的简中时间；
-  对不上的用卡池反推的偏移（见 :class:`modules.planner.sources.OffsetMap`）换算，标「偏移推算」。
-- **成本**：单抽成本与天井抽数都是 mdb 里的真实列，预测池用已确认段的众数兜底。
-  天井萝卜 = 天井抽数 × 单抽成本（当前库是 200 × 150 = 30000）。
-- **收入只能由用户填**：库里没有任何萝卜收入数据，这里不做估算，只按用户填的月收入
-  线性折算到每个目标池开始的那天（30 天/月）。
+- **已确认段**取 ``master.mdb``：卡池来自 ``gacha_data``（含未来），剧情活动来自
+  ``story_event_data``。两者都是客户端内置的**简中服实际排期**（A 级），当前快照覆盖到
+  2027-01-26（卡池）/ 2026-12-26（剧情活动）。这一段不需要任何跨服换算。
+- **预测段**取 BWiki 的「预测卡池」。wiki 的简中时间按「日服 + 固定偏移」推算，
+  **简中服处于加速期，这条轴已经不准**：2026-11-01 用 mdb 实测对齐，wiki 系统性偏晚
+  35~50 天且仍在扩大。所以这里不直接采用 wiki 的日期，而是用 mdb 的已确认段做**偏差校正**
+  （按精选卡 id 一对一配对，取偏差中位数平移），并把偏差区间一并回显。
+- **活动不做跨服换算**：``分类:活动`` 只有日服时间，且简中服的活动顺序与日服并不一致，
+  对轴没有意义；剧情活动直接用 mdb 的排期。育成活动（竞速嘉年华等）没有可核对的简中排期，
+  不展示。
+- **成本**：单抽成本（``gacha_data.cost_single``）与天井抽数（``gacha_exchange.pay_item_num``）
+  都是 mdb 的真实列，预测池用已确认段的众数兜底。天井萝卜 = 天井抽数 × 单抽成本。
+- **收入只能由用户填**：库里没有任何萝卜收入数据，这里只按用户填的月收入线性折算（30 天/月）。
 """
 
 from __future__ import annotations
@@ -44,24 +47,18 @@ logger = logging.getLogger(__name__)
 CARD_TYPE_LABELS = {1: "马娘", 2: "协助卡"}
 SEGMENT_LABELS = {
     "confirmed": "mdb 已确认",
-    "predicted": "wiki 预测",
+    "predicted": "wiki 预测（已校正）",
     "overlap": "与 mdb 重叠",
-}
-BASIS_LABELS = {"活动卡池": "活动卡池时间", "偏移推算": "偏移推算"}
-SOURCE_LEVEL_LABELS = {
-    "A": "官方原文（本机 master.mdb）",
-    "B": "权威二手",
-    "C": "社区整理 / 推算，可能已过期",
-    "D": "占位或来源不明",
 }
 
 NOTES = (
-    "已确认段来自本机 master.mdb 的 gacha_data，是客户端内置排期，"
-    "游戏临时调整而客户端没更新时会对不上。",
-    "预测段的简中时间是 BWiki 自己算好写在页面上的，属于社区推算（C 级），不是官方公告。",
-    "活动表只有日服时间：能对上同名「活动卡池」的用卡池的简中时间，"
-    "其余按卡池反推的偏移换算，标「偏移推算」。",
-    "预测段里与 mdb 已确认段重叠的行单独标出，只展示、不参与规划，避免同一期被算两次。",
+    "已确认段来自本机 master.mdb：卡池看 gacha_data、剧情活动看 story_event_data，"
+    "都是简中服客户端的实际排期，不需要跨服换算。",
+    "预测段的卡池来自 BWiki 的「简中::未实装」表；wiki 按「日服 + 固定偏移」推算，"
+    "简中服加速后已经不准（实测偏晚 35~50 天并继续扩大），所以这里用 mdb 实测偏差做了平移校正。",
+    "偏差用「同一张精选卡」在 mdb 已确认段与 wiki 预测段之间一对一配对算出，"
+    "校正后仍有误差，偏差区间见上方说明。",
+    "剧情活动直接用 mdb 的排期；育成活动（竞速嘉年华、大师挑战赛等）没有可核对的简中排期，不展示。",
     "天井萝卜 = 天井抽数 × 单抽成本，两者都取自 master.mdb"
     "（gacha_exchange.pay_item_num / gacha_data.cost_single）。",
 )
@@ -110,8 +107,10 @@ class PlannerService:
             return None
         meta = store.get_meta(self.db, store.META_MDB_SOURCE)
         signature = source_signature(mdb)
+        counts = store.counts(self.db)
         if (
-            store.counts(self.db)["confirmed"]
+            counts["confirmed"]
+            and counts["events"]
             and meta
             and meta.get("sha256") == signature["sha256"]
         ):
@@ -134,7 +133,7 @@ class PlannerService:
 
     # ------------------------------------------------------------------ fetch
     def refresh(self, *, force: bool = False) -> dict[str, Any]:
-        """重新导入 mdb 已确认段，并重抓两条 BWiki 来源。"""
+        """重新导入 mdb 已确认段，并重抓 BWiki 预测卡池。"""
         result: dict[str, Any] = {"imported": False, "sources": [], "counts": {}}
         mdb = self.mdb_path
         if mdb.exists():
@@ -151,43 +150,35 @@ class PlannerService:
         else:
             result["mdb_error"] = f"找不到 master.mdb：{mdb}"
 
-        pools_payload = self._fetch(sources.POOL_QUERY, force=force, result=result)
-        events_payload = self._fetch(sources.EVENT_QUERY, force=force, result=result)
-
-        pool_rows = sources.parse_pools(pools_payload.payload) if pools_payload else []
-        event_rows = sources.parse_events(events_payload.payload) if events_payload else []
+        fetched = self._fetch(force=force, result=result)
+        pool_rows = sources.parse_pools(fetched.payload) if fetched else []
         if pool_rows:
-            written = self._write_forecast(pool_rows, event_rows)
-            result["counts"] = written
-        elif not events_payload:
+            result["counts"] = self._write_forecast(pool_rows)
+        elif fetched is not None:
             store.clear_wiki(self.db)
             result["counts"] = store.counts(self.db)
 
         store.set_meta(
             self.db,
             store.META_LAST_REFRESH,
-            {
-                "refreshed_at": store.now_iso(),
-                "pools": len(pool_rows),
-                "events": len(event_rows),
-            },
+            {"refreshed_at": store.now_iso(), "pools": len(pool_rows)},
         )
         result["counts"] = store.counts(self.db)
+        result["calibration"] = self._calibration()
         return result
 
-    def _fetch(self, query: str, *, force: bool, result: dict[str, Any]):
-        label = "预测卡池" if query == sources.POOL_QUERY else "活动表"
+    def _fetch(self, *, force: bool, result: dict[str, Any]):
         try:
             fetched = self.fetcher.get(
-                sources.ask_query(query, self.options.max_results), force=force
+                sources.ask_query(sources.POOL_QUERY, self.options.max_results), force=force
             )
         except FetchError as exc:
-            self.logger.warning("%s 抓取失败：%s", label, exc)
-            result["sources"].append({"label": label, "ok": False, "error": str(exc)})
+            self.logger.warning("预测卡池抓取失败：%s", exc)
+            result["sources"].append({"label": "预测卡池", "ok": False, "error": str(exc)})
             return None
         result["sources"].append(
             {
-                "label": label,
+                "label": "预测卡池",
                 "ok": True,
                 "cached": fetched.from_cache,
                 "stale": fetched.stale,
@@ -197,31 +188,22 @@ class PlannerService:
         return fetched
 
     # ------------------------------------------------------------------ write
-    def _write_forecast(
-        self, pool_rows: list[sources.PredictedPool], event_rows: list[sources.JpEvent]
-    ) -> dict[str, int]:
+    def _write_forecast(self, pool_rows: list[sources.PredictedPool]) -> dict[str, int]:
         horizon = self._confirmed_horizon()
-        offset_map = sources.OffsetMap.build(pool_rows)
         unit = self._cost_unit()
         fetched_at = store.now_iso()
-
-        pool_payload: list[tuple[Any, ...]] = []
+        payload: list[tuple[Any, ...]] = []
         for pool in pool_rows:
             segment = (
                 "overlap" if horizon and int(pool.start.timestamp()) <= horizon else "predicted"
             )
-            card_type = None
-            if pool.ids.get("角色ID") and not pool.ids.get("支援卡ID"):
-                card_type = 1
-            elif pool.ids.get("支援卡ID") and not pool.ids.get("角色ID"):
-                card_type = 2
-            pool_payload.append(
+            payload.append(
                 (
                     pool.uid,
                     "wiki-predicted",
                     segment,
                     pool.title,
-                    card_type,
+                    None,
                     None,
                     int(pool.start.timestamp()),
                     int(pool.end.timestamp()) if pool.end else None,
@@ -229,68 +211,74 @@ class PlannerService:
                     unit["cost_single"],
                     unit["ceiling_pulls"],
                     "",
-                    json.dumps(pool.ids, ensure_ascii=False, sort_keys=True),
+                    json.dumps(pool.ids, ensure_ascii=False),
                     "C",
                     pool.source_url,
                     fetched_at,
                 )
             )
-
-        event_payload = self._event_rows(event_rows, pool_rows, offset_map, fetched_at)
-        store.replace_wiki(self.db, pool_payload, event_payload)
-        store.set_meta(
-            self.db,
-            store.META_OFFSET,
-            {
-                "median_days": offset_map.median_days,
-                "spread": offset_map.spread_days,
-                "pairs": len(offset_map.points),
-                "computed_at": fetched_at,
-            },
-        )
+        store.replace_wiki(self.db, payload)
         return store.counts(self.db)
 
-    def _event_rows(
-        self,
-        event_rows: list[sources.JpEvent],
-        pools: list[sources.PredictedPool],
-        offset_map: sources.OffsetMap,
-        fetched_at: str,
-    ) -> list[tuple[Any, ...]]:
-        payload: list[tuple[Any, ...]] = []
-        for event in event_rows:
-            if event.jp_start is None:
+    # ------------------------------------------------------------ calibration
+    def _calibration(self) -> dict[str, Any]:
+        """用「同一期马娘池的精选角色」在 mdb 已确认段与 wiki 预测段之间配对，量出 wiki 偏晚多少天。
+
+        两边都按**角色 id 集合**比：mdb 侧只取马娘池（``card_type = 1``）的精选卡，
+        wiki 侧只取 ``角色ID``（不含支援卡），集合完全相等且该组合在 mdb 里只出现一次才算一对。
+        八骏 / 必得这类多卡池与自选池会被排除，避免样本被搅浑。
+        """
+        confirmed = store.list_pools(self.db, segment="confirmed")
+        overlap = store.list_pools(self.db, segment="overlap")
+        by_cards: dict[frozenset[str], list[dict[str, Any]]] = {}
+        for row in confirmed:
+            if row["card_type"] != 1:
                 continue
-            matched = sources.match_event_pool(event.title, pools)
-            basis = "活动卡池" if matched is not None else "偏移推算"
-            start = matched.start if matched else None
-            end = matched.end if matched else None
-            delta: float | None = matched.delta_days if matched else None
-            if start is None:
-                if not offset_map.known:
-                    continue
-                start = offset_map.to_cn(event.jp_start)
-                delta = offset_map.delta_days(event.jp_start)
-            if end is None and event.jp_end is not None:
-                end = offset_map.to_cn(event.jp_end) if offset_map.known else None
-            payload.append(
-                (
-                    event.uid,
-                    event.title,
-                    event.kind,
-                    int(event.jp_start.timestamp()),
-                    int(event.jp_end.timestamp()) if event.jp_end else None,
-                    int(start.timestamp()),
-                    int(end.timestamp()) if end else None,
-                    basis,
-                    None if delta is None else round(delta),
-                    matched.uid if matched else None,
-                    "C",
-                    event.source_url,
-                    fetched_at,
-                )
+            cards = _ids_of(row).get("card_ids") or []
+            if not cards:
+                continue
+            by_cards.setdefault(frozenset(cards), []).append(row)
+
+        samples: list[dict[str, Any]] = []
+        for row in overlap:
+            chars = _ids_of(row).get("char_ids") or []
+            if not chars:
+                continue
+            matches = by_cards.get(frozenset(chars)) or []
+            if len(matches) != 1:
+                continue
+            bias = (int(row["start_ts"]) - int(matches[0]["start_ts"])) / 86400
+            samples.append(
+                {
+                    "card_ids": chars,
+                    "title": row["title"],
+                    "wiki_start_ts": int(row["start_ts"]),
+                    "actual_start_ts": int(matches[0]["start_ts"]),
+                    "bias_days": round(bias, 1),
+                    "actual_title": matches[0]["title"],
+                }
             )
-        return payload
+        if not samples:
+            return {
+                "pairs": 0,
+                "bias_days": 0,
+                "min_days": None,
+                "max_days": None,
+                "samples": [],
+                "note": "没有可与 mdb 对齐的样本，预测段未校正（wiki 原值可能偏晚 1~2 个月）。",
+            }
+        deltas = [sample["bias_days"] for sample in samples]
+        return {
+            "pairs": len(samples),
+            "bias_days": round(statistics.median(deltas), 1),
+            "min_days": min(deltas),
+            "max_days": max(deltas),
+            "samples": sorted(samples, key=lambda item: item["actual_start_ts"]),
+            "note": (
+                "偏差 = wiki 预测日期 − mdb 实际日期；取中位数做平移校正。"
+                "简中服加速时偏差会随时间扩大，越远的预测误差越大。"
+            ),
+        }
 
     # -------------------------------------------------------------- internals
     def _confirmed_horizon(self) -> int | None:
@@ -315,25 +303,19 @@ class PlannerService:
     def status(self) -> dict[str, Any]:
         counts = store.counts(self.db)
         last = store.get_meta(self.db, store.META_LAST_REFRESH) or {}
-        offset = store.get_meta(self.db, store.META_OFFSET) or {}
         mdb_meta = store.get_meta(self.db, store.META_MDB_SOURCE) or {}
-        unit = self._cost_unit()
         mdb = self.mdb_path
         signature = source_signature(mdb) if mdb.exists() else None
         return {
             "counts": counts,
             "sources": [
-                {
-                    "key": key,
-                    "label": label,
-                    "level": "A" if key == "mdb" else "C",
-                }
+                {"key": key, "label": label, "level": "A" if key == "mdb" else "C"}
                 for key, label in sources.SOURCE_LABELS.items()
             ],
             "refreshed_at": last.get("refreshed_at"),
-            "offset": offset,
+            "calibration": self._calibration(),
             "cost": {
-                **unit,
+                **self._cost_unit(),
                 "source": "master.mdb gacha_data.cost_single / gacha_exchange.pay_item_num",
             },
             "mdb": {
@@ -341,6 +323,7 @@ class PlannerService:
                 "exists": mdb.exists(),
                 "imported_at": mdb_meta.get("imported_at"),
                 "pools": counts["confirmed"],
+                "events": counts["events"],
                 "stale": bool(signature and mdb_meta.get("sha256") != signature["sha256"]),
             },
             "window": {"days": self.options.horizon_days},
@@ -348,20 +331,20 @@ class PlannerService:
         }
 
     # --------------------------------------------------------------- forecast
-    def forecast(self, days: int | None = None, *, include_overlap: bool = True) -> dict[str, Any]:
+    def forecast(self, days: int | None = None, *, include_overlap: bool = False) -> dict[str, Any]:
         window_days = days or self.options.horizon_days
-        zone = system_zone()
         now = datetime.now(UTC)
-        window_end = now + timedelta(days=window_days)
-        end_stamp = int(window_end.timestamp())
+        end_stamp = int((now + timedelta(days=window_days)).timestamp())
         start_stamp = int((now - timedelta(days=7)).timestamp())
+        calibration = self._calibration()
+        bias_days = float(calibration.get("bias_days") or 0)
 
-        pools = [self._pool_item(row, now) for row in store.list_pools(self.db)]
-        pools = [item for item in pools if item is not None]
+        items = [self._pool_item(row, now, bias_days) for row in store.list_pools(self.db)]
         pools = [
             item
-            for item in pools
-            if item["start_ts"] <= end_stamp
+            for item in items
+            if item is not None
+            and item["start_ts"] <= end_stamp
             and (item["end_ts"] or item["start_ts"]) >= start_stamp
             and (include_overlap or item["segment"] != "overlap")
         ]
@@ -371,26 +354,20 @@ class PlannerService:
             if row["start_ts"] and start_stamp <= int(row["start_ts"]) <= end_stamp
         ]
         counts = store.counts(self.db)
-        offset = store.get_meta(self.db, store.META_OFFSET) or {}
         last = store.get_meta(self.db, store.META_LAST_REFRESH) or {}
         return {
             "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "window": {
                 "days": window_days,
                 "from_local": local_iso(now.timestamp()),
-                "to_local": local_iso(window_end.timestamp()),
-                "zone": zone_label(zone),
+                "to_local": local_iso(now.timestamp() + window_days * 86400),
+                "zone": zone_label(system_zone()),
             },
             "horizon": {
                 "confirmed_until_local": local_iso(self._confirmed_horizon()),
-                "note": "已确认段覆盖到这里；之后的行是 BWiki 预测。",
+                "note": "已确认段覆盖到这里；之后的行是 BWiki 预测，且已按 mdb 实测偏差平移校正。",
             },
-            "offset": {
-                "median_days": offset.get("median_days"),
-                "spread": offset.get("spread"),
-                "pairs": offset.get("pairs"),
-                "computed_at": offset.get("computed_at"),
-            },
+            "calibration": calibration,
             "cost": self._cost_unit(),
             "counts": {
                 **counts,
@@ -403,11 +380,18 @@ class PlannerService:
             "refreshed_at": last.get("refreshed_at"),
         }
 
-    def _pool_item(self, row: dict[str, Any], now: datetime) -> dict[str, Any] | None:
-        start_ts = int(row["start_ts"])
-        end_ts = int(row["end_ts"]) if row["end_ts"] else None
-        if start_ts >= SENTINEL_TS:
+    def _pool_item(
+        self, row: dict[str, Any], now: datetime, bias_days: float
+    ) -> dict[str, Any] | None:
+        raw_start = int(row["start_ts"])
+        if raw_start >= SENTINEL_TS:
             return None
+        raw_end = int(row["end_ts"]) if row["end_ts"] else None
+        segment = row["segment"]
+        # 预测段的日期按实测偏差平移；已确认段与重叠段不动（重叠段本身就是 mdb 覆盖期内的 wiki 值）
+        correction = round(bias_days) if segment == "predicted" else 0
+        start_ts = raw_start - correction * 86400
+        end_ts = (raw_end - correction * 86400) if raw_end else None
         stamp = int(now.timestamp())
         if end_ts is not None and end_ts < stamp:
             state = "ended"
@@ -420,8 +404,8 @@ class PlannerService:
         card_type = row["card_type"]
         return {
             "uid": row["uid"],
-            "segment": row["segment"],
-            "segment_label": SEGMENT_LABELS.get(row["segment"], row["segment"]),
+            "segment": segment,
+            "segment_label": SEGMENT_LABELS.get(segment, segment),
             "title": row["title"],
             "card_type": card_type,
             "card_type_label": CARD_TYPE_LABELS.get(card_type, "—"),
@@ -430,10 +414,9 @@ class PlannerService:
             "end_ts": end_ts,
             "starts_local": local_iso(start_ts),
             "ends_local": local_iso(end_ts),
+            "source_starts_local": local_iso(raw_start),
+            "correction_days": correction,
             "jp_starts_local": local_iso(row["jp_start_ts"]),
-            "offset_days": (
-                round((start_ts - int(row["jp_start_ts"])) / 86400) if row["jp_start_ts"] else None
-            ),
             "state": state,
             "days_to_start": _days_between(start_ts),
             "days_left": _days_between(end_ts) if end_ts else None,
@@ -461,11 +444,6 @@ class PlannerService:
             "kind": row["kind"],
             "starts_local": local_iso(start_ts),
             "ends_local": local_iso(end_ts),
-            "jp_starts_local": local_iso(row["jp_start_ts"]),
-            "offset_days": row["offset_days"],
-            "basis": row["basis"],
-            "basis_label": BASIS_LABELS.get(row["basis"], row["basis"]),
-            "matched_uid": row["matched_uid"],
             "state": state,
             "days_to_start": _days_between(start_ts),
             "days_left": _days_between(end_ts) if end_ts else None,
@@ -527,6 +505,7 @@ class PlannerService:
                     "title": pool["title"],
                     "segment": pool["segment"],
                     "starts_local": pool["starts_local"],
+                    "correction_days": pool["correction_days"],
                     "days_to_start": round(wait_days),
                     "state": pool["state"],
                     "priority": int(target.get("priority") or 1),
@@ -543,7 +522,8 @@ class PlannerService:
         notes = [
             "月收入按 30 天/月线性折算到每个目标池开始的那一天，不按周结算。",
             "券按 1 张 = 1 抽抵扣并优先使用；不区分有偿 / 无偿，也不折算成萝卜。",
-            "买不起的目标标「缺口」并且不扣账（视为放弃、把萝卜留给后面的池子）；想改可以先降抽数。",
+            "买不起的目标标「缺口」并且不扣账（视为放弃、把萝卜留给后面的池子）。",
+            "预测池的开始时间已按 mdb 实测偏差平移，仍有误差；越远的池子越不确定。",
         ]
         if unknown:
             notes.append(f"有 {unknown} 个目标池已不在当前预测窗口里（可能已刷新或过期），已跳过。")
@@ -572,6 +552,20 @@ class PlannerService:
 
     def plan(self, plan_id: int) -> dict[str, Any] | None:
         return store.get_plan(self.db, plan_id)
+
+
+def _ids_of(row: dict[str, Any]) -> dict[str, list[str]]:
+    try:
+        payload = json.loads(row.get("ids") or "{}")
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        key: [str(item) for item in value]
+        for key, value in payload.items()
+        if isinstance(value, list)
+    }
 
 
 def _days_between(stamp: int | None) -> int | None:

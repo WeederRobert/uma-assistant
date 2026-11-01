@@ -354,7 +354,7 @@ class StructuredLookup:
 
     # ------------------------------------------------------------------ 千里眼
     def _forecast(self, result: StructuredResult) -> None:
-        """近半年预测：已确认段看 mdb，之后看 BWiki 的简中推算，必须写明级别。"""
+        """近半年预测：已确认段看 mdb，之后看 BWiki 的简中推算（已按 mdb 实测偏差校正）。"""
         data = self._get("/api/planner/forecast", {"days": "180"}) or {}
         pools = [item for item in (data.get("pools") or []) if item.get("segment") == "predicted"]
         events = data.get("events") or []
@@ -362,20 +362,18 @@ class StructuredLookup:
             result.misses.append("千里眼：还没有预测数据（先在「规划」页刷新一次）")
             return
         horizon = (data.get("horizon") or {}).get("confirmed_until_local")
-        offset = data.get("offset") or {}
+        calibration = data.get("calibration") or {}
         lines = [f"客户端已确认排期到：{horizon}"]
         for item in pools[:5]:
             span = f"{item.get('starts_local')} → {item.get('ends_local')}"
             lines.append(f"预测卡池（C 级推算）：{item.get('title')}（{span}）")
         for item in events[:3]:
+            lines.append(f"剧情活动（A 级）：{item.get('title')}（{item.get('starts_local')}）")
+        if calibration.get("pairs"):
             lines.append(
-                f"预测活动（C 级推算）：{item.get('title')}（{item.get('starts_local')}，"
-                f"依据 {item.get('basis_label')}）"
-            )
-        if offset.get("median_days") is not None:
-            lines.append(
-                f"简中 = 日服 + {round(float(offset['median_days']))} 天"
-                f"（由 {offset.get('pairs') or 0} 组卡池实测反推）"
+                f"预测段已按 mdb 实测偏差前移 {calibration.get('bias_days')} 天"
+                f"（{calibration.get('pairs')} 组卡池配对，wiki 原本偏晚 "
+                f"{calibration.get('min_days')}~{calibration.get('max_days')} 天）"
             )
         result.facts.append(
             StructuredFact(

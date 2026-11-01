@@ -20,8 +20,8 @@ def build_router(service: PlannerService) -> APIRouter:
     def forecast(
         days: Annotated[int | None, Query(ge=1, le=365, description="预测窗口天数")] = None,
         include_overlap: Annotated[
-            bool, Query(description="是否包含与 mdb 已确认段重叠的预测行")
-        ] = True,
+            bool, Query(description="是否包含与 mdb 已确认段重叠的预测行（仅用于对照）")
+        ] = False,
     ) -> dict:
         return service.forecast(days=days, include_overlap=include_overlap)
 

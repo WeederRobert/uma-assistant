@@ -18,7 +18,7 @@ from modules.planner.service import PlannerService
 from modules.planner.settings import PlannerSettings
 
 CST = timezone(timedelta(hours=8))
-OFFSET_DAYS = 1104
+DAY = 86400
 
 
 def _cn(days_from_now: float) -> datetime:
@@ -48,23 +48,21 @@ def ask_payload(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 class FakeFetcher:
-    def __init__(self, pools: dict[str, Any], events: dict[str, Any]) -> None:
-        self.pools = pools
-        self.events = events
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
         self.calls: list[str] = []
 
     def get(self, query: str, *, force: bool = False) -> FetchResult:
         self.calls.append(query)
-        payload = self.pools if "简中::未实装" in query else self.events
         return FetchResult(
-            payload=payload,
+            payload=self.payload,
             url="https://wiki.biligame.com/umamusume/简中卡池",
             fetched_at="2026-11-01T00:00:00+00:00",
         )
 
 
 def build_mdb(path: Path) -> Path:
-    """最小 master.mdb：一个进行中池、常驻池、已结束池、未定档占位。"""
+    """最小 master.mdb：两个未来池（拉长 horizon）、常驻 / 已结束 / 未定档各一个、两条剧情活动。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.unlink(missing_ok=True)
     conn = sqlite3.connect(path)
@@ -102,46 +100,61 @@ def build_mdb(path: Path) -> Path:
             pay_item_num INTEGER NOT NULL,
             disp_order INTEGER
         );
-        CREATE TABLE card_data (
-            id INTEGER PRIMARY KEY,
-            chara_id INTEGER NOT NULL
-        );
-        CREATE TABLE support_card_data (
-            id INTEGER PRIMARY KEY,
-            chara_id INTEGER NOT NULL
+        CREATE TABLE story_event_data (
+            story_event_id INTEGER PRIMARY KEY,
+            announce_id INTEGER,
+            consume_tp_ratio INTEGER,
+            bonus_reward_ratio INTEGER,
+            notice_date INTEGER,
+            start_date INTEGER,
+            middle_date_01 INTEGER,
+            middle_date_02 INTEGER,
+            ending_date INTEGER,
+            end_date INTEGER
         );
         """
     )
     now = int(datetime.now().timestamp())
-    day = 86400
     conn.executemany(
         'INSERT INTO text_data (id, category, "index", text) VALUES (?, ?, ?, ?)',
         [
             (26, 26, 9001, "精选 优俊少女招募"),
-            (26, 26, 9002, "3★必得新人出道招募"),
-            (26, 26, 9003, "精选 协助卡招募"),
-            (26, 26, 9004, "3★ WISH&GAZE招募"),
-            (6, 6, 1001, "里见皇冠"),
+            (26, 26, 9002, "精选 优俊少女招募"),
+            (26, 26, 9003, "3★必得新人出道招募"),
+            (26, 26, 9004, "精选 优俊少女招募"),
+            (26, 26, 9005, "3★ WISH&GAZE招募"),
+            (214, 214, 5001, "测试剧情活动·上"),
+            (214, 214, 5002, "测试剧情活动·下"),
         ],
     )
     conn.executemany(
         "INSERT INTO gacha_data (id, type, card_type, cost_single, start_date, end_date) "
         "VALUES (?, ?, ?, ?, ?, ?)",
         [
-            (9001, 3, 1, 150, now + 5 * day, now + 15 * day),
-            (9002, 2, 1, 0, now - 1500 * day, 2_520_000_000),
-            (9003, 3, 2, 150, now - 20 * day, now - 5 * day),
-            (9004, 3, 1, 150, 2_530_000_000, 2_530_600_000),
+            # 拉长 horizon 用的长池
+            (9001, 3, 1, 150, now + 5 * DAY, now + 100 * DAY),
+            (9002, 3, 1, 150, now + 60 * DAY, now + 120 * DAY),
+            (9003, 2, 1, 0, now - 1500 * DAY, 2_520_000_000),
+            (9004, 3, 2, 150, now - 20 * DAY, now - 5 * DAY),
+            (9005, 3, 1, 150, 2_530_000_000, 2_530_600_000),
         ],
     )
-    conn.execute(
+    conn.executemany(
         "INSERT INTO gacha_exchange (gacha_id, card_id, card_type, pay_item_num, disp_order) "
-        "VALUES (9001, 2001, 1, 200, 1)"
+        "VALUES (?, ?, ?, ?, ?)",
+        [(9001, 2001, 1, 200, 1), (9002, 2002, 1, 200, 1)],
     )
-    conn.execute("INSERT INTO card_data (id, chara_id) VALUES (2001, 1001)")
-    conn.execute(
+    conn.executemany(
         "INSERT INTO gacha_available (gacha_id, card_id, card_type, rarity, is_pickup, "
-        "recommend_order) VALUES (9001, 2001, 1, 3, 1, 1)"
+        "recommend_order) VALUES (?, ?, ?, ?, ?, ?)",
+        [(9001, 2001, 1, 3, 1, 1), (9002, 2002, 1, 3, 1, 1)],
+    )
+    conn.executemany(
+        "INSERT INTO story_event_data (story_event_id, start_date, end_date) VALUES (?, ?, ?)",
+        [
+            (5001, now - 5 * DAY, now + 5 * DAY),
+            (5002, now + 10 * DAY, now + 20 * DAY),
+        ],
     )
     conn.commit()
     conn.close()
@@ -149,48 +162,23 @@ def build_mdb(path: Path) -> Path:
 
 
 def pools_payload() -> dict[str, Any]:
-    def row(title: str, days: float, **extra: Any) -> dict[str, Any]:
-        cn_start = _cn(days)
-        jp_start = cn_start - timedelta(days=OFFSET_DAYS)
+    """一条与 mdb 重叠（用于算偏差）、一条落在 horizon 之后（预测段）。"""
+
+    def row(title: str, days: float, card: str) -> dict[str, Any]:
         return {
             "title": title,
-            "开始描述": _fmt(jp_start),
-            "简中开始时间": _fmt(cn_start),
-            "简中结束时间": _fmt(cn_start + timedelta(days=10)),
-            **extra,
+            "开始描述": _fmt(_cn(days)),
+            "简中开始时间": _fmt(_cn(days)),
+            "简中结束时间": _fmt(_cn(days + 10)),
+            "角色ID": [card],
         }
 
     return ask_payload(
         [
-            row("「测试活动」活动卡池", 40, 角色ID=["108801"], 支援卡ID=["30195"]),
-            row("里见皇冠 UP卡池", 30, 角色ID=["108801"]),
-            row("早期预测池", 5, 角色ID=["106703"]),
-        ]
-    )
-
-
-def events_payload() -> dict[str, Any]:
-    def row(title: str, days: float, kind: str = "剧情活动") -> dict[str, Any]:
-        jp_start = _cn(days) - timedelta(days=OFFSET_DAYS)
-        return {
-            "title": title,
-            "名称": title,
-            "开始描述": _fmt(jp_start),
-            "结束描述": _fmt(jp_start + timedelta(days=12)),
-            "类型": kind,
-        }
-
-    return ask_payload(
-        [
-            row("剧情活动「测试活动」", 38),
-            row("剧情活动「无对应卡池」", 50),
-            {
-                "title": "全国公演",
-                "名称": "全国公演",
-                "开始描述": "常驻",
-                "结束描述": "常驻",
-                "类型": "育成活动",
-            },
+            # 9001 的精选卡是 2001、mdb 开在 +5 天；wiki 说 +49 天 → 偏晚 44 天
+            row("重叠池 UP卡池", 49, "2001"),
+            # horizon（+120 天）之后
+            row("预测池 UP卡池", 150, "2003"),
         ]
     )
 
@@ -221,7 +209,7 @@ def service(db: Database, settings: Settings, options: PlannerSettings, mdb: Pat
         settings,
         options,
         tmp_path / "planner",
-        fetcher=FakeFetcher(pools_payload(), events_payload()),
+        fetcher=FakeFetcher(pools_payload()),
     )
 
 
@@ -229,11 +217,7 @@ def service(db: Database, settings: Settings, options: PlannerSettings, mdb: Pat
 def test_parse_pools_skips_rows_without_cn_time() -> None:
     payload = ask_payload(
         [
-            {
-                "title": "有简中时间",
-                "简中开始时间": "2026/09/01 12:00",
-                "开始描述": "2023/08/24 12:00",
-            },
+            {"title": "有简中时间", "简中开始时间": "2026/09/01 12:00", "角色ID": ["108801"]},
             {"title": "只有日服时间", "开始描述": "2023/08/24 12:00"},
         ]
     )
@@ -241,68 +225,74 @@ def test_parse_pools_skips_rows_without_cn_time() -> None:
     pools = sources.parse_pools(payload)
 
     assert [pool.title for pool in pools] == ["有简中时间"]
-    assert pools[0].delta_days == pytest.approx(OFFSET_DAYS, abs=0.01)
+    assert pools[0].char_ids == ["108801"]
 
 
-def test_parse_events_keeps_kind_and_skips_permanent() -> None:
-    events = sources.parse_events(events_payload())
-
-    assert len(events) == 3
-    permanent = next(item for item in events if item.title == "全国公演")
-    assert permanent.jp_start is None
-    assert events[0].kind == "剧情活动"
-
-
-def test_offset_map_interpolates_between_points() -> None:
-    day = timedelta(days=1)
-    base = datetime(2023, 8, 24, 12, tzinfo=CST)
-    pools = [
-        sources.PredictedPool("a", base, base + 2104 * day, None, {}, ""),
-        sources.PredictedPool("b", base + 400 * day, base + 2504 * day, None, {}, ""),
-    ]
-
-    offset = sources.OffsetMap.build(pools)
-
-    assert offset.known
-    assert offset.median_days == pytest.approx(2104)
-    assert offset.delta_days(base + 200 * day) == pytest.approx(2104)
-    assert offset.delta_days(base - 10 * day) == pytest.approx(2104)
-    assert offset.spread_days == (2104, 2104)
-
-
-def test_offset_map_without_pairs_is_unknown() -> None:
-    offset = sources.OffsetMap.build([sources.PredictedPool("a", None, _cn(3), None, {}, "")])
-
-    assert not offset.known
-    with pytest.raises(ValueError):
-        offset.delta_days(_cn(3))
-
-
-def test_match_event_pool_uses_bracketed_title() -> None:
-    pool = sources.PredictedPool(
-        "「寂寥秋色，连缀思念」活动卡池", _cn(-100), _cn(10), _cn(20), {}, ""
+def test_parse_pools_splits_char_and_support_ids() -> None:
+    payload = ask_payload(
+        [
+            {
+                "title": "双卡池",
+                "简中开始时间": "2026/09/01 12:00",
+                "角色ID": "107701",
+                "支援卡ID": "30160, 30161",
+            }
+        ]
     )
 
-    assert sources.match_event_pool("剧情活动「寂寥秋色，连缀思念」", [pool]) is pool
-    assert sources.match_event_pool("剧情活动「没有这个」", [pool]) is None
+    pool = sources.parse_pools(payload)[0]
+    assert pool.char_ids == ["107701"]
+    assert pool.support_ids == ["30160", "30161"]
 
 
 # ----------------------------------------------------------------- importer
-def test_import_confirmed_skips_permanent_ended_and_unscheduled(db: Database, mdb: Path) -> None:
+def test_import_confirmed_reads_pools_and_story_events(db: Database, mdb: Path) -> None:
     summary = read_confirmed(db, mdb, default_cost_single=150, default_ceiling_pulls=200)
 
-    assert summary.pools == 1
-    assert summary.future == 1
+    assert summary.pools == 2
+    assert summary.future == 2
+    assert summary.events == 2
     assert summary.skipped["permanent"] == "常驻池 1 个"
     assert summary.skipped["ended"] == "已结束 1 个"
     assert summary.skipped["unscheduled"] == "未定档占位 1 个"
 
-    rows = store.list_pools(db, segment="confirmed")
-    assert rows[0]["uid"] == "mdb:9001"
-    assert rows[0]["cost_single"] == 150
-    assert rows[0]["ceiling_pulls"] == 200
-    assert rows[0]["pickups"] == "里见皇冠"
-    assert rows[0]["source_level"] == "A"
+    pools = store.list_pools(db, segment="confirmed")
+    assert {row["uid"] for row in pools} == {"mdb:9001", "mdb:9002"}
+    assert pools[0]["cost_single"] == 150
+    assert pools[0]["ceiling_pulls"] == 200
+    assert pools[0]["source_level"] == "A"
+    assert '"2001"' in pools[0]["ids"]
+
+    events = {row["title"]: row for row in store.list_events(db)}
+    assert set(events) == {"测试剧情活动·上", "测试剧情活动·下"}
+    assert events["测试剧情活动·上"]["kind"] == "剧情活动"
+    assert events["测试剧情活动·上"]["source_level"] == "A"
+
+
+def test_story_events_missing_is_not_fatal(db: Database, settings: Settings) -> None:
+    path = settings.mdb_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE text_data (id INTEGER, category INTEGER, "index" INTEGER, text TEXT);
+        CREATE TABLE gacha_data (
+            id INTEGER PRIMARY KEY, type INTEGER, card_type INTEGER,
+            cost_single INTEGER, start_date INTEGER, end_date INTEGER
+        );
+        """
+    )
+    conn.execute(
+        "INSERT INTO gacha_data VALUES (1, 3, 1, 150, ?, ?)",
+        (int(datetime.now().timestamp()), int(datetime.now().timestamp()) + 10 * DAY),
+    )
+    conn.commit()
+    conn.close()
+
+    summary = read_confirmed(db, path, default_cost_single=150, default_ceiling_pulls=200)
+
+    assert summary.pools == 1
+    assert summary.events == 0
 
 
 def test_import_confirmed_rejects_missing_tables(db: Database, settings: Settings) -> None:
@@ -314,69 +304,69 @@ def test_import_confirmed_rejects_missing_tables(db: Database, settings: Setting
         read_confirmed(db, bad, default_cost_single=150, default_ceiling_pulls=200)
 
 
-# ------------------------------------------------------------------ refresh
-def test_refresh_splits_segments_and_writes_events(service: PlannerService) -> None:
-    result = service.refresh(force=True)
-
-    counts = result["counts"]
-    assert counts["confirmed"] == 1
-    assert counts["predicted"] == 2
-    assert counts["overlap"] == 1
-    assert counts["events"] == 2
-
-    pools = {row["title"]: row for row in store.list_pools(service.db)}
-    assert pools["早期预测池"]["segment"] == "overlap"
-    assert pools["里见皇冠 UP卡池"]["segment"] == "predicted"
-    assert pools["里见皇冠 UP卡池"]["cost_single"] == 150
-    assert pools["里见皇冠 UP卡池"]["ceiling_pulls"] == 200
-    assert pools["里见皇冠 UP卡池"]["source_level"] == "C"
-
-
-def test_refresh_marks_matched_event_with_pool_time(service: PlannerService) -> None:
+# ------------------------------------------------------------- calibration
+def test_calibration_measures_wiki_lateness(service: PlannerService) -> None:
     service.refresh(force=True)
 
-    events = {row["title"]: row for row in store.list_events(service.db)}
-    matched = events["剧情活动「测试活动」"]
-    assert matched["basis"] == "活动卡池"
-    assert matched["matched_uid"] == "wiki:「测试活动」活动卡池"
+    calibration = service.status()["calibration"]
 
-    inferred = events["剧情活动「无对应卡池」"]
-    assert inferred["basis"] == "偏移推算"
-    assert inferred["offset_days"] == OFFSET_DAYS
+    assert calibration["pairs"] == 1
+    assert calibration["bias_days"] == pytest.approx(44, abs=0.1)
+    assert calibration["min_days"] == pytest.approx(44, abs=0.1)
+    assert calibration["samples"][0]["actual_title"] == "精选 优俊少女招募"
 
 
-def test_forecast_reports_window_offset_and_costs(service: PlannerService) -> None:
+def test_predicted_pool_is_shifted_by_measured_bias(service: PlannerService) -> None:
+    service.refresh(force=True)
+
+    data = service.forecast(days=365)
+    predicted = next(item for item in data["pools"] if item["segment"] == "predicted")
+
+    assert predicted["correction_days"] == 44
+    raw = datetime.fromisoformat(predicted["source_starts_local"])
+    shifted = datetime.fromisoformat(predicted["starts_local"])
+    assert (raw - shifted).days == 44
+
+
+def test_forecast_hides_overlap_by_default(service: PlannerService) -> None:
+    service.refresh(force=True)
+
+    default = service.forecast(days=365)
+    with_overlap = service.forecast(days=365, include_overlap=True)
+
+    assert all(item["segment"] != "overlap" for item in default["pools"])
+    assert any(item["segment"] == "overlap" for item in with_overlap["pools"])
+
+
+def test_forecast_window_filters_far_pools(service: PlannerService) -> None:
+    service.refresh(force=True)
+
+    short = service.forecast(days=30)
+
+    assert all(
+        item["days_to_start"] <= 30 for item in short["pools"] if item["state"] == "upcoming"
+    )
+    assert all(item["segment"] == "confirmed" for item in short["pools"])
+
+
+def test_forecast_lists_mdb_story_events(service: PlannerService) -> None:
     service.refresh(force=True)
 
     data = service.forecast(days=180)
 
-    assert data["window"]["days"] == 180
-    assert data["horizon"]["confirmed_until_local"]
-    assert data["offset"]["median_days"] == pytest.approx(OFFSET_DAYS, abs=0.01)
+    titles = [item["title"] for item in data["events"]]
+    assert titles == ["测试剧情活动·上", "测试剧情活动·下"]
+    assert all(item["source_level"] == "A" for item in data["events"])
+
+
+def test_forecast_reports_costs(service: PlannerService) -> None:
+    service.refresh(force=True)
+
+    data = service.forecast(days=180)
+
     assert data["cost"] == {"cost_single": 150, "ceiling_pulls": 200, "ceiling_carats": 30000}
-    assert any(pool["segment"] == "predicted" for pool in data["pools"])
-    assert all(pool["starts_local"] for pool in data["pools"])
-
-
-def test_forecast_can_hide_overlap(service: PlannerService) -> None:
-    service.refresh(force=True)
-
-    data = service.forecast(days=180, include_overlap=False)
-
-    assert all(pool["segment"] != "overlap" for pool in data["pools"])
-
-
-def test_forecast_respects_window(service: PlannerService) -> None:
-    service.refresh(force=True)
-
-    short = service.forecast(days=20)
-
-    assert all(pool["segment"] != "predicted" for pool in short["pools"]), (
-        "20 天窗口里没有 30 天后的预测池"
-    )
-    assert all(
-        pool["days_to_start"] <= 20 for pool in short["pools"] if pool["state"] == "upcoming"
-    )
+    assert data["horizon"]["confirmed_until_local"]
+    assert any("简中服加速" in note for note in data["notes"])
 
 
 def test_refresh_reports_missing_mdb(
@@ -389,13 +379,14 @@ def test_refresh_reports_missing_mdb(
             settings,
             options,
             tmp_path / "planner",
-            fetcher=FakeFetcher(pools_payload(), events_payload()),
+            fetcher=FakeFetcher(pools_payload()),
         )
         result = service.refresh(force=True)
 
         assert "mdb_error" in result
         assert result["counts"]["confirmed"] == 0
-        assert result["counts"]["predicted"] == 3, "没有 mdb 就没有已确认段，三行都算预测"
+        assert result["counts"]["predicted"] == 2, "没有 mdb 就没有 horizon，两行都算预测"
+        assert result["calibration"]["pairs"] == 0
     finally:
         database.close()
 
@@ -411,36 +402,32 @@ def _plan(service: PlannerService, carats: int, income: int, uid: str) -> dict[s
     }
 
 
-def test_evaluate_reports_shortfall_when_carats_are_not_enough(service: PlannerService) -> None:
+def test_evaluate_reports_shortfall(service: PlannerService) -> None:
     service.refresh(force=True)
-    uid = "wiki:「测试活动」活动卡池"
 
-    result = service.evaluate(_plan(service, carats=0, income=9000, uid=uid))
+    result = service.evaluate(_plan(service, carats=0, income=3000, uid="wiki:预测池 UP卡池"))
 
     row = result["rows"][0]
     assert row["cost_carats"] == 30000
     assert row["affordable"] is False
-    assert row["shortfall_carats"] == pytest.approx(18000, abs=50)
+    assert row["shortfall_carats"] > 15000
     assert result["totals"]["shortfall_carats"] == row["shortfall_carats"]
 
 
-def test_evaluate_marks_affordable_and_deducts(service: PlannerService) -> None:
+def test_evaluate_marks_affordable(service: PlannerService) -> None:
     service.refresh(force=True)
-    uid = "wiki:「测试活动」活动卡池"
 
-    result = service.evaluate(_plan(service, carats=30000, income=0, uid=uid))
+    result = service.evaluate(_plan(service, carats=30000, income=0, uid="wiki:预测池 UP卡池"))
 
     row = result["rows"][0]
     assert row["affordable"] is True
     assert row["shortfall_carats"] == 0
-    assert row["balance_after"] == 0
     assert result["totals"]["spent_carats"] == 30000
 
 
 def test_evaluate_uses_tickets_before_carats(service: PlannerService) -> None:
     service.refresh(force=True)
-    uid = "wiki:「测试活动」活动卡池"
-    plan = _plan(service, carats=30000, income=0, uid=uid)
+    plan = _plan(service, carats=30000, income=0, uid="wiki:预测池 UP卡池")
     plan["tickets"] = 20
 
     result = service.evaluate(plan)
@@ -457,9 +444,11 @@ def test_api_forecast_and_plan_crud(db: Database, settings: Settings, mdb: Path)
         assert status["window"]["days"] == 180
         assert status["cost"]["ceiling_carats"] == 30000
         assert status["mdb"]["exists"] is True
+        assert status["mdb"]["events"] == 2
 
         forecast = client.get("/api/planner/forecast").json()
         assert "pools" in forecast and "events" in forecast
+        assert "calibration" in forecast
         assert forecast["notes"]
 
         created = client.post(

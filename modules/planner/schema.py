@@ -4,9 +4,9 @@
 
 - ``planner_pools``：卡池行。``segment`` 区分口径来源——``confirmed``（``master.mdb``
   内置排期）、``predicted``（BWiki 的简中预测，且落在 mdb 排期之后）、``overlap``
-  （BWiki 预测但与 mdb 已确认段重叠，只展示不参与规划，避免重复计数）。
-- ``planner_events``：活动行。BWiki 的活动表只有日服时间，简中时间靠卡池反推的偏移换算，
-  ``basis`` 记这条用的是「活动卡池」还是「偏移推算」。
+  （BWiki 预测但与 mdb 已确认段重叠，只用来量 wiki 偏晚多少天，默认不展示、不参与规划）。
+- ``planner_events``：活动行，**只来自** ``master.mdb`` 的 ``story_event_data``（简中服
+  自己的节奏）。早期版本里「日服活动 + 固定偏移」换算出来的行会在下次刷新时整表替换清掉。
 - ``planner_plans`` / ``planner_targets``：本地保存的规划方案与目标池。
 """
 

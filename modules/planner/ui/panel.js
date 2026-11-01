@@ -1,6 +1,6 @@
-// 千里眼 + 萝卜规划面板：所有口径（天数、成本、偏移、够不够）都由后端算好，
-// 这里只做展示与表单。跨模块的数据（mdb 卡池 / 大赛）不在这里取，
-// 本模块自己读 master.mdb 的已确认排期，避免依赖别的模块是否加载成功。
+// 千里眼 + 萝卜规划面板：所有口径（天数、成本、偏差校正、够不够）都由后端算好，
+// 这里只做展示与表单。跨模块的数据（大赛）不在这里取；本模块自己读 master.mdb
+// 的已确认排期，避免依赖别的模块是否加载成功。
 const API = "/api/planner";
 
 function pad2(value) {
@@ -55,7 +55,8 @@ function stateTone(item) {
 function levelTag(item, escapeHtml) {
   const level = String(item.source_level || "?").toUpperCase();
   const tone = level === "A" ? "a" : level === "B" ? "b" : level === "C" ? "c" : "d";
-  const label = level === "A" ? "master.mdb" : level === "C" ? "社区推算" : `${level} 级`;
+  const label =
+    level === "A" ? "master.mdb（简中服实际排期）" : level === "C" ? "BWiki 社区推算" : `${level} 级`;
   return `<span class="tag level-${tone}" title="${escapeHtml(label)}">${escapeHtml(level)} 级</span>`;
 }
 
@@ -70,16 +71,17 @@ export default {
     let plans = [];
     let planId = null;
     let days = 180;
+    let showOverlap = false;
     let busy = false;
 
     root.innerHTML = `
       <h1 class="page-title">规划 · 千里眼</h1>
       <p class="page-desc">
-        近半年的<strong>卡池与活动</strong>在这里一次看完：<strong>已确认段</strong>来自本机
-        <span class="mono">master.mdb</span> 的客户端内置排期（A 级），
-        <strong>预测段</strong>来自 BWiki 的「预测卡池」（社区推算，C 级），
-        活动表只有日服时间，用卡池反推的偏移换算。勾选想要的池子就能算萝卜够不够。
-        所有时间按系统时区显示。
+        近半年的<strong>卡池与剧情活动</strong>：已确认段来自本机
+        <span class="mono">master.mdb</span>（简中服客户端的实际排期，A 级），
+        预测段来自 BWiki 的「预测卡池」（C 级，<strong>已按 mdb 实测偏差校正</strong>）。
+        简中服正在加速，日服时间对不上轴，所以活动只用 mdb 的排期、不做跨服换算。
+        勾选想要的池子就能算萝卜够不够。所有时间按系统时区显示。
       </p>
       <section class="card">
         <h2>千里眼：近半年预测</h2>
@@ -92,6 +94,7 @@ export default {
               <option value="365">一年</option>
             </select>
           </label>
+          <label><input id="planner-overlap" type="checkbox" /> 显示与 mdb 重叠的预测行</label>
           <button class="ghost" id="planner-refresh">刷新预测</button>
           <span class="hint" id="planner-hint">加载中…</span>
         </div>
@@ -137,10 +140,6 @@ export default {
       return map;
     }
 
-    function defaultPulls() {
-      return forecast?.cost?.ceiling_pulls || 200;
-    }
-
     // ---------------------------------------------------------------- forecast
     function poolRow(item) {
       const checked = selected.has(item.uid) ? "checked" : "";
@@ -148,10 +147,11 @@ export default {
         .slice(0, 4)
         .map((name) => `<span class="tag">${escapeHtml(name)}</span>`)
         .join("");
-      const offset =
-        item.offset_days === null || item.offset_days === undefined
-          ? ""
-          : ` · 日服 ${dateOnly(item.jp_starts_local)} 起（+${item.offset_days} 天）`;
+      const correction = item.correction_days
+        ? `<span class="tag level-c">wiki 原值 ${dateOnly(
+            item.source_starts_local,
+          )}，按实测偏差前移 ${item.correction_days} 天</span>`
+        : "";
       return `
         <div class="list-row">
           <div>
@@ -164,14 +164,15 @@ export default {
               <span class="pill ${stateTone(item)}">${escapeHtml(stateLabel(item))}</span>
               <span>${shortTime(item.starts_local)} → ${shortTime(item.ends_local)}</span>
               <span class="tag">${escapeHtml(item.segment_label)}</span>
-              ${item.card_type_label ? `<span class="tag">${escapeHtml(item.card_type_label)}</span>` : ""}
+              ${item.card_type_label && item.card_type_label !== "—" ? `<span class="tag">${escapeHtml(item.card_type_label)}</span>` : ""}
               ${levelTag(item, escapeHtml)}
               ${pickups}
             </div>
             <div class="meta">
               <span class="mono">单抽 ${carats(item.cost_single)} · 天井 ${item.ceiling_pulls} 抽 = ${carats(
                 item.ceiling_carats,
-              )} 萝卜</span>${escapeHtml(offset)}
+              )} 萝卜</span>
+              ${correction}
               ${
                 item.source_url
                   ? ` · <a href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">来源页面</a>`
@@ -191,18 +192,24 @@ export default {
               <span class="pill ${stateTone(item)}">${escapeHtml(stateLabel(item))}</span>
               ${item.kind ? `<span class="tag">${escapeHtml(item.kind)}</span>` : ""}
               ${levelTag(item, escapeHtml)}
-              <span class="tag">${escapeHtml(item.basis_label)}</span>
             </div>
             <div class="meta">
               <span>${shortTime(item.starts_local)} → ${shortTime(item.ends_local)}</span>
-              <span>日服 ${dateOnly(item.jp_starts_local)} 起${
-                item.offset_days === null || item.offset_days === undefined
-                  ? ""
-                  : `（+${item.offset_days} 天）`
-              }</span>
             </div>
           </div>
         </div>`;
+    }
+
+    function calibrationText() {
+      const calibration = forecast?.calibration || {};
+      if (!calibration.pairs) return "预测段未校正（没有可比对的样本）";
+      const range =
+        calibration.min_days === calibration.max_days
+          ? `+${calibration.min_days} 天`
+          : `+${calibration.min_days}~+${calibration.max_days} 天`;
+      return `wiki 偏晚实测 ${range}（${calibration.pairs} 组卡池配对，中位数 +${
+        calibration.bias_days
+      } 天，已按中位数前移）`;
     }
 
     function section(key, title, items, rowFn, emptyText) {
@@ -221,15 +228,9 @@ export default {
       const confirmed = forecast.pools.filter((item) => item.segment === "confirmed");
       const predicted = forecast.pools.filter((item) => item.segment === "predicted");
       const overlap = forecast.pools.filter((item) => item.segment === "overlap");
-      const offset = forecast.offset || {};
-      const offsetText = Number.isFinite(offset.median_days)
-        ? `简中 = 日服 + ${Math.round(offset.median_days)} 天（${offset.pairs || 0} 组卡池实测，范围 ${
-            offset.spread ? `${offset.spread[0]}~${offset.spread[1]} 天` : "—"
-          }）`
-        : "还没有可用的偏移数据，活动无法换算";
-      hintEl.textContent = `窗口 ${forecast.window.days} 天 · 已确认到 ${
-        dateOnly(forecast.horizon.confirmed_until_local)
-      } · ${offsetText}`;
+      hintEl.textContent = `窗口 ${forecast.window.days} 天 · 已确认到 ${dateOnly(
+        forecast.horizon.confirmed_until_local,
+      )} · ${calibrationText()}`;
       forecastEl.innerHTML = `
         ${section(
           "pool:confirmed",
@@ -240,22 +241,38 @@ export default {
         )}
         ${section(
           "pool:predicted",
-          "预测卡池（BWiki，社区推算）",
+          "预测卡池（BWiki，已按实测偏差校正）",
           predicted,
           poolRow,
           "BWiki 没有给出超出已确认段的预测行；点「刷新预测」重新抓一次。",
         )}
-        ${section("event", "活动（日服时间换算）", forecast.events, eventRow, "窗口内没有可换算的活动。")}
-        <details style="margin-top:14px">
-          <summary class="hint">与 mdb 已确认段重叠的预测行（${overlap.length}）：只展示，不参与规划</summary>
-          <div class="list grid" style="margin-top:8px">
-            ${overlap.slice(0, 12).map(poolRow).join("") || '<div class="empty">没有重叠行。</div>'}
-          </div>
-        </details>
+        ${section(
+          "event",
+          "剧情活动（master.mdb 排期）",
+          forecast.events,
+          eventRow,
+          "窗口内没有剧情活动排期。育成活动（竞速嘉年华等）没有可核对的简中排期，不显示。",
+        )}
+        ${
+          overlap.length
+            ? `<details style="margin-top:14px">
+                 <summary class="hint">与 mdb 已确认段重叠的预测行（${overlap.length}）：只做对照，不参与规划</summary>
+                 <div class="list grid" style="margin-top:8px">${overlap
+                   .slice(0, 12)
+                   .map(poolRow)
+                   .join("")}</div>
+               </details>`
+            : ""
+        }
         <details style="margin-top:10px">
           <summary class="hint">口径与限制</summary>
           <ul class="hint" style="margin-top:8px">
             ${forecast.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}
+            ${
+              forecast.calibration?.note
+                ? `<li>${escapeHtml(forecast.calibration.note)}</li>`
+                : ""
+            }
           </ul>
         </details>`;
     }
@@ -383,9 +400,7 @@ export default {
         .map(([uid, item]) => ({ pool_uid: uid, pulls: Number(item.pulls) || 0, priority: 1 }))
         .filter((target) => poolsByUid().has(target.pool_uid));
       return {
-        name: planId
-          ? (plans.find((plan) => plan.id === planId)?.name ?? "我的规划")
-          : "我的规划",
+        name: planId ? (plans.find((plan) => plan.id === planId)?.name ?? "我的规划") : "我的规划",
         carats: Number(caratsEl.value) || 0,
         tickets: Number(ticketsEl.value) || 0,
         monthly_income: Number(incomeEl.value) || 0,
@@ -396,7 +411,9 @@ export default {
 
     async function loadForecast(withSpinner = true) {
       if (withSpinner) forecastEl.innerHTML = `<div class="empty">加载中…</div>`;
-      forecast = await api(`${API}/forecast?days=${days}`);
+      forecast = await api(
+        `${API}/forecast?days=${days}&include_overlap=${showOverlap ? "true" : "false"}`,
+      );
       for (const uid of [...selected.keys()]) {
         if (!poolsByUid().has(uid)) selected.delete(uid);
       }
@@ -407,8 +424,8 @@ export default {
     async function loadStatus() {
       status = await api(`${API}/status`);
       const counts = status.counts;
-      if (planHintEl && !planHintEl.textContent) {
-        planHintEl.textContent = `已确认 ${counts.confirmed} · 预测 ${counts.predicted} · 活动 ${counts.events}`;
+      if (!planHintEl.textContent) {
+        planHintEl.textContent = `已确认 ${counts.confirmed} 池 / ${counts.events} 活动 · 预测 ${counts.predicted}`;
       }
     }
 
@@ -446,6 +463,15 @@ export default {
       }
     });
 
+    root.querySelector("#planner-overlap").addEventListener("change", async (event) => {
+      showOverlap = event.target.checked;
+      try {
+        await loadForecast();
+      } catch (error) {
+        toast(`加载失败：${error.message}`);
+      }
+    });
+
     root.querySelector("#planner-refresh").addEventListener("click", async (event) => {
       const button = event.currentTarget;
       button.disabled = true;
@@ -457,9 +483,8 @@ export default {
         });
         const counts = result.counts || {};
         toast(
-          `已刷新：预测 ${counts.predicted || 0} · 重叠 ${counts.overlap || 0} · 活动 ${
-            counts.events || 0
-          }`,
+          `已刷新：预测 ${counts.predicted || 0} · 活动 ${counts.events || 0}` +
+            (result.calibration?.pairs ? ` · 偏差中位数 +${result.calibration.bias_days} 天` : ""),
         );
         await loadForecast();
         await loadStatus();
